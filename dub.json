@@ -1,0 +1,37 @@
+{
+	"name": "sassed",
+    "targetName": "sassed",
+    "version": "0.1.0",
+    "description": "Thin wrapper around libsass.",
+
+    "authors": [
+        "Vlad Rindevich"
+    ],
+
+    "dependencies": {
+        "derelict-sass": ">=0.1.0",
+        "libasync": ">=0.6.5",
+        "dlogg": ">=0.4.0"
+    },
+
+    "importPaths": ["source/"],
+    "sourcePaths": ["source/"],
+
+    "license": "BSL-1.0",
+
+    "configurations": [
+        {
+            "name": "library",
+            "targetType": "library"
+        },
+        {
+            "name": "exec",
+            "targetType": "executable",
+        },
+        {
+            "name": "unittests",
+            "targetType": "executable",
+            "build": ["unittest"],
+        }
+    ],
+}
