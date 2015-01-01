@@ -85,24 +85,31 @@ shared class Sass
 
         ctx.options = options.get ();
         ctx.input_path = input.toStringz ();
+        ctx.output_path = output.toStringz ();
 
         sass_compile_file (ctx);
 
         if (ctx.error_status)
             log (ctx.error_message.to!string ());
 
-        if (output != "")
+        if (options.sourcemap.file != "")
         {
-            auto file = File (output, "w+");
-            file.write (ctx.output_string.to!string ());
-            file.close ();
-            sass_free_file_context (ctx);
-
-            return "";
+            auto mapfile = File (options.sourcemap.file, "w+");
+            mapfile.write (ctx.source_map_string.to!string ());
+            mapfile.close ();
         }
 
         auto result = ctx.output_string.to!string ();
         sass_free_file_context (ctx);
+
+        if (output != "")
+        {
+            auto file = File (output, "w+");
+            file.write (result);
+            file.close ();
+
+            return null;
+        }
 
         return result;
     }
@@ -360,10 +367,10 @@ shared struct LogSettings
     LoggingLevel level = LoggingLevel.Fatal;
 }
 
-shared struct ExtensionSettings
+enum ExtensionSettings : string
 {
-    string scss = "scss";
-    string sass = "sass";
+    scss = "scss",
+    sass = "sass",
 }
 
 shared struct Sass2ScssSettings
