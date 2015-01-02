@@ -34,9 +34,9 @@ class SassConsole
         bool isHelpNeeding;
     }
 
-    this (string[] args)
+    this( string[] args )
     {
-        sass = new shared(Sass);
+        sass = new shared Sass;
 
         styles = [
             "nested" : SassStyle.NESTED,
@@ -45,8 +45,7 @@ class SassConsole
             "compressed" : SassStyle.COMPRESSED
         ];
 
-        getopt 
-        (
+        getopt(
             args,
             config.passThrough,
             config.caseSensitive,
@@ -62,118 +61,118 @@ class SassConsole
 
         executableName = args[0];
 
-        if (args.length == 1)
+        if( args.length == 1 )
             isHelpNeeding = true;
 
-        if (args.length > 1)
+        if( args.length > 1 )
         {
-            if (isStdinUsing)
+            if( isStdinUsing )
                 output = args[1];
             else
                 input = args[1];
         }
 
-        if (args.length > 2 && !isStdinUsing)
+        if( args.length > 2 && !isStdinUsing )
             output = args[2];
     }
 
     void run ()
     {
-        if (isHelpNeeding)
+        if( isHelpNeeding )
         {
-            help ();
+            help();
             return;
         }
 
-        if (style != "")
+        if( style != "" )
         {
-            if (!styles.keys.canFind (style))
-                throw new SassConsoleException (format("Style `%s` does not"
-                    ~ "allowed here. Allowed styles: %s", style, styles.keys.join (", ")));
+            if( !styles.keys.canFind( style ))
+                throw new SassConsoleException( format( "Style `%s` does not"
+                    ~ "allowed here. Allowed styles: %s", style, styles.keys.join ( ", " )));
             
             sass.options.style = styles[style];
         }
 
-        if (isLineNumberUsing)
+        if( isLineNumberUsing )
             sass.options.emitComments();
 
-        if (loadPath != "")
+        if( loadPath != "" )
             sass.options.includePaths = loadPath;
 
-        if (isMapCommentOmitting)
-            sass.options.sourcemap.omitSourceUrl ();
+        if( isMapCommentOmitting )
+            sass.options.sourcemap.omitSourceUrl();
 
-        if (precision > 0)
+        if( precision > 0 )
             sass.options.precision = precision;
 
-        if (!isStdinUsing)
+        if( !isStdinUsing )
         {
-            if (output != "")
+            if( output != "" )
             {
-                if (isSourceMapEmitting)
+                if( isSourceMapEmitting )
                     sass.options.sourcemap.file = output ~ ".map";
 
-                sass.compileFile (input, output);
+                sass.compileFile( input, output );
             }
             else
-                writeln (sass.compileFile (input));
+                writeln( sass.compileFile( input ));
         }
         else
         {
             string contents;
-            writeln ("Enter your code:");
-            readf ("%s", &contents);
+            writeln( "Enter your code:" );
+            readf( "%s", &contents );
 
-            if (output != "")
+            if( output != "" )
             {
-                auto result = sass.compile (contents);
-                auto file = File (output, "w+");
-                file.write (result);
-                file.close ();
+                auto result = sass.compile( contents );
+                auto file = File( output, "w+" );
+                file.write( result );
+                file.close();
             }
             else
-                writeln (sass.compile (contents));
+                writeln( sass.compile( contents ));
         }
     }
 
-    void help ()
+    void help()
     {
-        writefln ("Usage: %s [options] [INPUT] [OUTPUT]", executableName);
-        writeln ("Options:");
+        writefln( "Usage: %s [options] [INPUT] [OUTPUT]", executableName );
+        writeln( "Options:" );
 
-        writeln (formatHelp ("s", "stdin", "Read input from standard input instead of an input file."));
-        writeln (formatHelp ("t", "style NAME", "Output style. Can be:"));
+        writeln( formatHelp("s", "stdin", "Read input from standard input instead of an input file."));
+        writeln(formatHelp("t", "style NAME", "Output style. Can be:"));
 
         foreach (name, ref style; styles)
-            writeln (formatHelp ("", "", "- " ~ name));
+            writeln(formatHelp("", "", "- " ~ name));
 
-        writeln (formatHelp ("l", "line-numbers", "Emit comments showing original line numbers."));
-        writeln (formatHelp ("", "line-comments"));
-        writeln (formatHelp ("I", "load-path PATH", "Set Sass import path."));
-        writeln (formatHelp ("m", "sourcemap", "Emit source map."));
-        writeln (formatHelp ("M", "omit-map-comment", "Omits the source map url comment."));
-        writeln (formatHelp ("p", "precision", "Set the precision for numbers."));
-        writeln (formatHelp ("v", "version", "Display compiled versions."));
-        writeln (formatHelp ("h", "help", "Display this help message."));
-        writeln ("");
+        writeln( formatHelp( "l", "line-numbers", "Emit comments showing original line numbers." ));
+        writeln( formatHelp( "", "line-comments" ));
+        writeln( formatHelp( "I", "load-path PATH", "Set Sass import path." ));
+        writeln( formatHelp( "m", "sourcemap", "Emit source map." ));
+        writeln( formatHelp( "M", "omit-map-comment", "Omits the source map url comment." ));
+        writeln( formatHelp( "p", "precision", "Set the precision for numbers." ));
+        writeln( formatHelp( "v", "version", "Display compiled versions." ));
+        writeln( formatHelp( "h", "help", "Display this help message." ));
+        writeln( "" );
     }
 
 protected:
 
-    string formatHelp (string shortCommand = "", string longCommand = "", string description = "")
+    string formatHelp( string shortCommand = "", string longCommand = "", string description = "" )
     {
         Appender!string result = "";
 
-        if (longCommand != "")
+        if( longCommand != "" )
             longCommand = "--" ~ longCommand;
 
-        if (shortCommand != "")
+        if( shortCommand != "" )
         {
             shortCommand = "-" ~ shortCommand;
-            result ~= format ("%6s, %-22s %s", shortCommand, longCommand, description);
+            result ~= format( "%6s, %-22s %s", shortCommand, longCommand, description );
         }
         else
-            result ~= format ("%7s %-22s %s", shortCommand, longCommand, description);
+            result ~= format( "%7s %-22s %s", shortCommand, longCommand, description );
         
         return result.data;
     }
@@ -181,8 +180,8 @@ protected:
 
 class SassConsoleException : Exception
 {
-    this (string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+    this( string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null )
     {
-        super ("Sass Console Exception: " ~ msg, file, line, next);
+        super( msg, file, line, next );
     }
 }

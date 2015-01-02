@@ -2,16 +2,16 @@ import sassed.console : SassConsole;
 import std.stdio : writeln;
 import std.c.stdlib : exit;
 
-void main (string[] args)
+void main( string[] args )
 {
     try
     {
-        auto sassConsole = new SassConsole (args);
-        sassConsole.run ();
+        auto sassConsole = new SassConsole( args );
+        sassConsole.run();
     }
-    catch (Exception e)
+    catch( Exception e )
     {
-        writeln (e);
-        exit (-1);
+        writeln( e );
+        exit( -1 );
     }
 }
