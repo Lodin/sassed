@@ -24,6 +24,7 @@ private
     import std.datetime : Clock;
     import std.array : Appender, replace;
     import std.algorithm : canFind;
+    import std.typecons : Tuple;
 }
 
 enum SassStyle : int
@@ -53,70 +54,50 @@ shared class Sass
             DerelictSass.load();
     }
 
-    string compile( string source )
+    ~this()
     {
-        string result;
-
-        auto ctx = sass_new_context();
-
-        ctx.options = options.get();
-        ctx.source_string = source.toStringz();
-
-        sass_compile( ctx );
-
-        if( ctx.error_status )
-            log( ctx.error_message.to!string() );
-
-        result = ctx.output_string.to!string();
-        sass_free_context( ctx );
-
-        return result;
+        logger.destroy();
     }
 
-    string compileFile( string input, string output = "" )
+    immutable(string) compile( in string source )
     {
-        if( !input.exists() )
-            throw new SassException( format( "File `%s` does not exist", input ));
+        string sourcemap;
 
-        if( !input.isFile() )
-            throw new SassException( format( "`%s` is not a file", input ));
+        if( options.sourcemap.enabled )
+            return compileImpl!true( source, sourcemap );
+        else
+            return compileImpl!false( source, sourcemap );
+    }
 
-        auto ctx = sass_new_file_context();
+    immutable(string) compile( in string source, out string sourcemap )
+    {
+        if( options.sourcemap.enabled )
+            return compileImpl!true( source, sourcemap );
+        else
+            return compileImpl!false( source, sourcemap );
+    }
 
-        ctx.options = options.get();
-        ctx.input_path = input.toStringz();
-        ctx.output_path = output.toStringz();
+    immutable(string) compileFile( in string input, in string output = "" )
+    {
+        string sourcemap;
 
-        sass_compile_file( ctx );
-
-        if( ctx.error_status )
-            log( ctx.error_message.to!string () );
-
-        if( options.sourcemap.file != "" )
-        {
-            auto mapfile = File( options.sourcemap.file, "w+" );
-            mapfile.write( ctx.source_map_string.to!string () );
-            mapfile.close();
-        }
-
-        auto result = ctx.output_string.to!string();
-        sass_free_file_context( ctx );
-
-        if( output != "" )
-        {
-            auto file = File( output, "w+" );
-            file.write( result );
-            file.close();
-
-            return null;
-        }
-
-        return result;
+        if( options.sourcemap.enabled )
+            return compileFileImpl!true( input, output, sourcemap );
+        else
+            return compileFileImpl!false( input, output, sourcemap );
     } 
 
-    void compileDir( string input, string output )
+    immutable(string) compileFile( in string input, in string output, out string sourcemap )
     {
-        void each( void delegate( string name ) action )
+        if( options.sourcemap.enabled )
+            return compileFileImpl!true( input, output, sourcemap );
+        else
+            return compileFileImpl!false( input, output, sourcemap );
+    } 
+
+    void compileDir( in string input, in string output )
+    {
+        void each( void delegate( in string name ) action ) const
         {
             foreach( string name; dirEntries( input, SpanMode.shallow ))
             {
@@ -127,23 +108,23 @@ shared class Sass
             }
         }
 
-        void writeCommentedFile( File file, string name, string writingStr )
+        void writeCommentedFile( ref File file, in string name, in string source ) const
         {
             if( options.singleFile.sourceComments )
             {
                 file.writeln(
                     "\n/* " 
                     ~ options.singleFile.sourceCommentsTemplate.replace(
-                        cast(string)options.singleFile.namePlaceholder,
+                        options.singleFile.placeholder,
                         name
                     ) ~ " */"
                 );
             }
             
-            file.writeln( writingStr.to!string() );
+            file.writeln( source.to!string() );
         }
 
-        string buildOutputPath( string filename )
+        string buildOutputPath( in string filename ) const
         {
             return buildPath(
                 output,
@@ -182,13 +163,29 @@ shared class Sass
             {
                 if( name.extension[1..$] == options.extension.sass )
                 {
-                    auto compiled = compile( sass2scss(
-                        name.readText().toStringz(),
-                        options.sass2scss.get()
-                    ).to!string() );
-                    
+                    string compiled;
+
                     auto outputFile = buildOutputPath( name );
-                    
+
+                    if( options.sourcemap.enabled )
+                    {
+                        string sourcemap;
+
+                        compiled = compile( sass2scss(
+                            name.readText().toStringz(),
+                            options.sass2scss.get(),
+                        ).to!string(), sourcemap );
+
+                        writeMapFile( output, sourcemap );
+                    }
+                    else
+                    {
+                        compiled = compile( sass2scss(
+                            name.readText().toStringz(),
+                            options.sass2scss.get()
+                        ).to!string() );
+                    }
+
                     auto file = File( outputFile, "w+" );
                     file.write( compiled.to!string() );
                     file.close();
@@ -199,18 +196,20 @@ shared class Sass
         }
     }
 
-    Tid watchDir( string input, string output )
+    Tid watchDir( in string input, in string output )
     {
         testDirs( input, output );
         return spawn( &watchDirImpl, input, output );
     }
 
-    void unwatchDir( Tid id )
+    void unwatchDir( scope Tid id )
     {
         send( id, true );
     }
 
-    protected void watchDirImpl( string input, string output )
+protected:
+
+    void watchDirImpl( in string input, in string output )
     {
         auto event = getThreadEventLoop();
         auto watcher = new AsyncDirectoryWatcher( event );
@@ -257,7 +256,7 @@ shared class Sass
         }
     }
 
-    protected void testDirs( string input, string output )
+    void testDirs( in string input, in string output )
     {
         if( !input.exists() )
             throw new SassException( format( "Directory `%s` does not exist", input ));
@@ -272,7 +271,7 @@ shared class Sass
             throw new SassException( format( "`%s` is not a directory", output ));
     }
 
-    protected void log( string message )
+    void log( in string message )
     {
         if ( !logger )
         {
@@ -288,6 +287,95 @@ shared class Sass
         }
 
         logger.log( message, options.log.level );
+    }
+
+    immutable(string) compileImpl( bool isMapUsing )(
+        in string source,
+        out string sourcemap
+    )
+    {
+        string result;
+        auto ctx = sass_new_context();
+        
+        ctx.options = options.get();
+        ctx.source_string = source.toStringz();
+
+        static if( isMapUsing )
+            ctx.options.source_map_file = toStringz( "temp" ~ options.sourcemap.extension );
+        else
+            ctx.options.source_map_file = "".toStringz();
+        
+        sass_compile( ctx );
+        
+        if( ctx.error_status )
+            log( ctx.error_message.to!string() );
+        
+        static if( isMapUsing )
+            sourcemap = ctx.source_map_string.to!string();
+        
+        result = ctx.output_string.to!string();
+        sass_free_context( ctx );
+        
+        return result;
+    }
+
+    immutable(string) compileFileImpl( bool isMapUsing )(
+        in string input,
+        in string output,
+        out string sourcemap
+    )
+    {
+        if( !input.exists() )
+            throw new SassException( format( "File `%s` does not exist", input ));
+        
+        if( !input.isFile() )
+            throw new SassException( format( "`%s` is not a file", input ));
+        
+        auto ctx = sass_new_file_context();
+        
+        ctx.options = options.get();
+        ctx.input_path = input.toStringz();
+        ctx.output_path = output.toStringz();
+
+        static if( isMapUsing )
+            ctx.options.source_map_file = toStringz( output ~ options.sourcemap.extension );
+        else
+            ctx.options.source_map_file = "".toStringz();
+        
+        sass_compile_file( ctx );
+        
+        if( ctx.error_status )
+            log( ctx.error_message.to!string() );
+        
+        auto result = ctx.output_string.to!string();
+        
+        if( output != "" )
+        {
+            auto file = File( output, "w+" );
+            file.write( result );
+            file.close();
+            
+            if( options.sourcemap.enabled )
+                writeMapFile( output, ctx.source_map_string.to!string() );
+            
+            sass_free_file_context( ctx );
+            
+            return null;
+        }
+        
+        static if( isMapUsing )
+            sourcemap = ctx.source_map_string.to!string();
+        
+        sass_free_file_context( ctx );
+        
+        return result;
+    }
+
+    void writeMapFile( string output, string source )
+    {
+        auto mapfile = File( output ~ options.sourcemap.extension, "w+" );
+        mapfile.write( source );
+        mapfile.close();
     }
 }
 
@@ -322,17 +410,16 @@ shared struct SassOptions
     void emitComments() { isCommentsEmitted = true; }
     void enableIndentedSyntax() { isSyntaxIndented = true; }
 
-    private sass_options get()
+    private sass_options get() const
     {
         if( style == SassStyle.COMPACT || style == SassStyle.EXPANDED )
             throw new SassException( "Only `nested` and `compressed` output"
-                                     ~ " styles are currently supported" );
+                ~ " styles are currently supported" );
         
         sass_options options;
         
         options.output_style = cast(int)style;
         options.source_comments = isCommentsEmitted;
-        options.source_map_file = sourcemap.file.toStringz();
         options.omit_source_map_url = sourcemap.isSourceUrlOmitted;
         options.source_map_embed = sourcemap.isSourceUrlEmbedded;
         options.source_map_contents = sourcemap.isIncludeContentEmbedded;
@@ -347,13 +434,20 @@ shared struct SassOptions
 
 shared struct SourceMap
 {
-    string file;
-
     private
     {
+        string _extension;
+
         bool isSourceUrlOmitted;
         bool isSourceUrlEmbedded;
         bool isIncludeContentEmbedded;
+    }
+
+    @property
+    {
+        void extension( in string extension_ ) { _extension = "." ~ extension_; }
+        string extension() const { return _extension; }
+        bool enabled() { return _extension != ""; }
     }
 
     void omitSourceUrl() { isSourceUrlOmitted = true; }
@@ -363,8 +457,20 @@ shared struct SourceMap
 
 shared struct LogSettings
 {
-    string file;
-    LoggingLevel level = LoggingLevel.Fatal;
+    private
+    {
+        string _file;
+        LoggingLevel _level = LoggingLevel.Fatal;
+    }
+
+    @property
+    {
+        void file( in string file_ ) { _file = file_; }
+        string file() const { return _file; }
+
+        void level( in LoggingLevel level_ ) { _level = level_; }
+        LoggingLevel level() const { return _level; }
+    }
 }
 
 shared struct ExtensionSettings
@@ -390,7 +496,7 @@ shared struct Sass2ScssSettings
     void stripComments() { commentState = SASS2SCSS_STRIP_COMMENT; }
     void convertComments() { commentState = SASS2SCSS_CONVERT_COMMENT; }
 
-    private int get()
+    private int get() const
     {
         return prettifyState | commentState;
     }
@@ -398,11 +504,11 @@ shared struct Sass2ScssSettings
 
 shared struct SingleFile
 {
-    string name = "style";
-    string namePlaceholder = "%{filename}";
-
     private
     {
+        string _name = "style";
+        string _placeholder = "%{filename}";
+
         bool enabled;
         bool sourceComments;
         string commentsTemplate;
@@ -410,19 +516,25 @@ shared struct SingleFile
 
     @property
     {
-        void sourceCommentsTemplate( string template_ )
+        void name( in string name_ ) { _name = name_; }
+        private string name() const { return _name; }
+
+        void placeholder( in string placeholder_ ) { _placeholder = placeholder_; }
+        private string placeholder() const { return _placeholder; }
+
+        void sourceCommentsTemplate( in string template_ )
         {
-            if( !template_.canFind( cast(string)namePlaceholder ))
+            if( !template_.canFind( placeholder ))
                 throw new SassException( format( "Template should contain"
-                    ~ " placeholder `%s` for file name", namePlaceholder ));
+                    ~ " placeholder `%s` for file name", placeholder ));
             
             commentsTemplate = template_;
         }
 
-        private string sourceCommentsTemplate()
+        private string sourceCommentsTemplate() const
         {
             if( commentsTemplate == "" )
-                return "File " ~ namePlaceholder;
+                return "File " ~ placeholder;
             else
                 return commentsTemplate;
         }

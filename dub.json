@@ -4,18 +4,13 @@
     "version": "0.1.0",
     "description": "Thin wrapper around libsass.",
 
-    "authors": [
-        "Vlad Rindevich"
-    ],
+    "authors": [ "Vlad Rindevich" ],
 
     "dependencies": {
-        "derelict-sass": ">=0.1.0",
-        "libasync": ">=0.6.5",
+        "derelict-sass": ">=1.0.0",
+        "libasync": ">=0.6.6",
         "dlogg": ">=0.4.0"
     },
-
-    "importPaths": ["source/"],
-    "sourcePaths": ["source/"],
 
     "license": "BSL-1.0",
 
@@ -27,11 +22,13 @@
         {
             "name": "exec",
             "targetType": "executable",
+            "sourcePaths": [ "source/" ]
         },
         {
-            "name": "unittests",
+            "name": "tests",
             "targetType": "executable",
-            "build": ["unittest"],
+            "sourcePaths": [ "tests/" ],
+            "importPaths": [ "source/" ]
         }
     ],
 }

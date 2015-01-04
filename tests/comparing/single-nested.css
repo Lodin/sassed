@@ -1,0 +1,364 @@
+﻿@import url(http://fonts.googleapis.com/css?family=Vollkorn);
+#main p {
+  color: #00ff00;
+  width: 97%; }
+  #main p .redbox {
+    background-color: #ff0000;
+    color: #000000; }
+
+#main {
+  width: 97%; }
+  #main p, #main div {
+    font-size: 2em; }
+    #main p a, #main p #fake-links .link, #fake-links #main p .link, #main p #demo .overview .fakelink, #demo .overview #main p .fakelink, #main p #admin .overview .fakelink, #admin .overview #main p .fakelink, #main div a, #main div #fake-links .link, #fake-links #main div .link, #main div #demo .overview .fakelink, #demo .overview #main div .fakelink, #main div #admin .overview .fakelink, #admin .overview #main div .fakelink {
+      font-weight: bold; }
+  #main pre {
+    font-size: 3em; }
+
+a, #fake-links .link, #demo .overview .fakelink, #admin .overview .fakelink {
+  font-weight: bold;
+  text-decoration: none; }
+  a:hover, .hoverlink, #fake-links .link:hover, #demo .overview .fakelink:hover, #admin .overview .fakelink:hover {
+    text-decoration: underline; }
+  body.firefox a, body.firefox #fake-links .link, #fake-links body.firefox .link, body.firefox #demo .overview .fakelink, #demo .overview body.firefox .fakelink, body.firefox #admin .overview .fakelink, #admin .overview body.firefox .fakelink {
+    font-weight: normal; }
+
+#main {
+  color: black; }
+  #main a, #main #fake-links .link, #fake-links #main .link, #main #demo .overview .fakelink, #demo .overview #main .fakelink, #main #admin .overview .fakelink, #admin .overview #main .fakelink {
+    font-weight: bold; }
+    #main a:hover, #main .hoverlink, #main #fake-links .link:hover, #fake-links #main .link:hover, #main #demo .overview .fakelink:hover, #demo .overview #main .fakelink:hover, #main #admin .overview .fakelink:hover, #admin .overview #main .fakelink:hover {
+      color: red; }
+
+#main {
+  color: black; }
+  #main-sidebar {
+    border: 1px solid; }
+
+.funky {
+  font-family: fantasy;
+  font-size: 30em;
+  font-weight: bold; }
+
+.funky {
+  font: 20px/24px fantasy;
+  font-weight: bold; }
+
+/* This comment is
+ * several lines long.
+ * since it uses the CSS comment syntax,
+ * it will appear in the CSS output */
+body {
+  color: black; }
+
+a, #fake-links .link, #demo .overview .fakelink, #admin .overview .fakelink {
+  color: green; }
+
+a, #fake-links .link, #demo .overview .fakelink, #admin .overview .fakelink {
+  color: green; }
+
+.foo {
+  color: green; }
+
+#main {
+  width: 5em; }
+
+#main {
+  width: 5em; }
+
+#sidebar {
+  width: 5em; }
+
+body.firefox .header:before {
+  content: "Hi, Firefox users!"; }
+
+p {
+  width: 1.11111in; }
+
+p {
+  font: 10px/8px;
+  width: 500px;
+  width: 1;
+  height: 250px;
+  margin-left: 9px; }
+
+p {
+  font: 12px/30px; }
+
+p {
+  color: #050709; }
+
+p {
+  color: #020406; }
+
+p {
+  color: rgba(255, 255, 0, 0.75); }
+
+p {
+  color: rgba(255, 0, 0, 0.8);
+  background-color: rgba(255, 0, 0, 0.25); }
+
+p {
+  cursor: e-resize; }
+
+p:before {
+  content: "Foo Bar";
+  font-family: sans-serif; }
+
+p {
+  margin: 7px auto; }
+
+p:before {
+  content: "I ate 15 pies!"; }
+
+p:before {
+  content: "I ate  pies!"; }
+
+p {
+  width: 7em; }
+
+p {
+  color: red; }
+
+p {
+  color: red; }
+
+p.foo {
+  border-color: blue; }
+
+p {
+  font: 12px/30px; }
+
+#main {
+  content: "First content";
+  new-content: "First time reference"; }
+
+#main {
+  content: "Non-null content"; }
+
+.sidebar {
+  width: 300px; }
+  @media screen and (orientation: landscape) {
+    .sidebar {
+      width: 500px; } }
+
+@media screen {
+  @media (orientation: landscape) {
+    .sidebar {
+      width: 500px; } } }
+
+@media screen and (-webkit-min-device-pixel-ratio: 1.5) {
+  .sidebar {
+    width: 500px; } }
+
+.error, .seriousError, .criticalError {
+  border: 1px #f00;
+  background-color: #fdd; }
+
+.seriousError, .criticalError {
+  border-width: 3px; }
+
+.error, .seriousError, .criticalError {
+  border: 1px #f00;
+  background-color: #fdd; }
+
+.error.intrusion, .intrusion.seriousError, .intrusion.criticalError {
+  background-image: url("/image/hacked.png"); }
+
+.seriousError, .criticalError {
+  border-width: 3px; }
+
+a:hover, .hoverlink, #fake-links .link:hover, #demo .overview .fakelink:hover, #admin .overview .fakelink:hover {
+  text-decoration: underline; }
+
+.comment a.user:hover, .comment .user.hoverlink, .comment #fake-links .user.link:hover, #fake-links .comment .user.link:hover, .comment #demo .overview .user.fakelink:hover, #demo .overview .comment .user.fakelink:hover, .comment #admin .overview .user.fakelink:hover, #admin .overview .comment .user.fakelink:hover {
+  font-weight: bold; }
+
+.error, .seriousError, .criticalError {
+  border: 1px #f00;
+  background-color: #fdd; }
+
+.attention, .seriousError, .criticalError {
+  font-size: 3em;
+  background-color: #ff0; }
+
+.seriousError, .criticalError {
+  border-width: 3px; }
+
+.error, .seriousError, .criticalError {
+  border: 1px #f00;
+  background-color: #fdd; }
+
+.seriousError, .criticalError {
+  border-width: 3px; }
+
+.criticalError {
+  position: fixed;
+  top: 10%;
+  bottom: 10%;
+  left: 10%;
+  right: 10%; }
+
+a, #fake-links .link, #demo .overview .fakelink, #admin .overview .fakelink {
+  color: blue; }
+  a:hover, .hoverlink, #fake-links .link:hover, #demo .overview .fakelink:hover, #admin .overview .fakelink:hover {
+    text-decoration: underline; }
+
+#admin .tabbar a, #admin .tabbar #fake-links .link, #fake-links #admin .tabbar .link, #demo .overview #admin .tabbar .fakelink, #admin .tabbar .overview .fakelink, #admin .overview .tabbar .fakelink {
+  font-weight: bold; }
+
+#admin .tabbar a, #admin .tabbar #fake-links .link, #fake-links #admin .tabbar .link, #demo .overview #admin .tabbar .fakelink, #admin .tabbar .overview .fakelink, #admin .overview .tabbar .fakelink {
+  font-weight: bold; }
+
+#context #fake-links .link.notice, #fake-links #context .link.notice, #context #demo .overview .fakelink.notice, #demo .overview #context .fakelink.notice, #context #admin .overview .fakelink.notice, #admin .overview #context .fakelink.notice, #context a.notice, #context a.important, #context #fake-links .important.link, #fake-links #context .important.link, #context #demo .overview .important.fakelink, #demo .overview #context .important.fakelink, #context #admin .overview .important.fakelink, #admin .overview #context .important.fakelink {
+  color: blue;
+  font-weight: bold;
+  font-size: 2em; }
+
+@media print {
+  .error, .seriousError, .criticalError {
+    border: 1px #f00;
+    background-color: #fdd; }
+  .seriousError, .criticalError {
+    border-width: 3px; } }
+
+@at-root .child { }
+
+@at-root {
+ }
+
+@media print {
+  .page {
+    width: 8in;
+    @at-root (without: media) {
+      color: red; }
+ } }
+
+p {
+  border: 1px solid; }
+
+p {
+  color: green; }
+
+.puma-icon {
+  background-image: url('/images/puma.png'); }
+
+.sea-slug-icon {
+  background-image: url('/images/sea-slug.png'); }
+
+.egret-icon {
+  background-image: url('/images/egret.png'); }
+
+.salamander-icon {
+  background-image: url('/images/salamander.png'); }
+
+.puma-icon {
+  background-image: url('/images/puma.png');
+  border: 2px solid black;
+  cursor: default; }
+
+.sea-slug-icon {
+  background-image: url('/images/sea-slug.png');
+  border: 2px solid blue;
+  cursor: pointer; }
+
+.egret-icon {
+  background-image: url('/images/egret.png');
+  border: 2px solid white;
+  cursor: move; }
+
+h1 {
+  font-size: 2em; }
+
+h2 {
+  font-size: 1.5em; }
+
+h3 {
+  font-size: 1.2em; }
+
+.page-title {
+  font-family: Arial;
+  font-size: 20px;
+  font-weight: bold;
+  color: #ff0000;
+  padding: 4px;
+  margin-top: 10px; }
+
+a, #fake-links .link, #demo .overview .fakelink, #admin .overview .fakelink {
+  color: blue;
+  background-color: red; }
+
+p {
+  border-color: blue;
+  border-width: 1in;
+  border-style: dashed; }
+
+p {
+  border-color: blue;
+  border-width: 1in;
+  border-style: dashed; }
+
+h1 {
+  border-color: blue;
+  border-width: 2in;
+  border-style: dashed; }
+
+p {
+  border-color: blue;
+  border-width: 1in;
+  border-style: dashed; }
+
+h1 {
+  border-color: blue;
+  border-width: 2in;
+  border-style: dashed; }
+
+.primary {
+  color: #ff0000;
+  background-color: #00ff00;
+  border-color: #0000ff; }
+
+.secondary {
+  color: #00ff00;
+  background-color: #0000ff;
+  border-color: #ff0000; }
+
+.stylish {
+  font-weight: bold; }
+
+* html #logo {
+  background-image: url(/logo.gif); }
+
+.colors {
+  background-color: blue;
+  color: white;
+  border-color: blue; }
+
+#sidebar {
+  width: 300px; }
+
+#sidebar {
+  width: 240px; }
+
+#sidebar {
+  width: 240px; }
+
+/* TODO: same here */
+.breadcrumb:before {
+  content: "\\"; }
+
+.foo label.due input[type=text] {
+  padding-right: 25px; }
+
+.ding {
+  font-size: 12px;
+  color: red; }
+
+div {
+  height: 10px; }
+
+div {
+  a: 10px; }
+
+div {
+  foo: 10px; }
