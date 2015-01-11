@@ -18,7 +18,7 @@ private
     import std.conv : to;
     import std.stdio : File, stderr;
     import std.file : exists, isFile, isDir, dirEntries, SpanMode, readText,
-        extension;
+        extension, mkdir;
     import std.path : setExtension, baseName, buildPath;
     import std.concurrency : spawn, receive, send, Tid, OwnerTerminated;
     import std.datetime : Clock;
@@ -95,7 +95,7 @@ shared class Sass
             return compileFileImpl!false( input, output, sourcemap );
     } 
 
-    void compileDir( in string input, in string output )
+    void compileFolder( in string input, in string output )
     {
         void each( void delegate( in string name ) action ) const
         {
@@ -110,11 +110,11 @@ shared class Sass
 
         void writeCommentedFile( ref File file, in string name, in string source ) const
         {
-            if( options.singleFile.sourceComments )
+            if( options.singleFile.isSourceCommentsEmitted )
             {
                 file.writeln(
                     "\n/* " 
-                    ~ options.singleFile.sourceCommentsTemplate.replace(
+                    ~ options.singleFile.sourceCommentTemplate.replace(
                         options.singleFile.placeholder,
                         name
                     ) ~ " */"
@@ -176,7 +176,7 @@ shared class Sass
                             options.sass2scss.get(),
                         ).to!string(), sourcemap );
 
-                        writeMapFile( output, sourcemap );
+                        createMapFile( output, sourcemap );
                     }
                     else
                     {
@@ -186,9 +186,7 @@ shared class Sass
                         ).to!string() );
                     }
 
-                    auto file = File( outputFile, "w+" );
-                    file.write( compiled.to!string() );
-                    file.close();
+                    createResultFile( outputFile, compiled.to!string() );
                 }
                 else
                     compileFile( name, buildOutputPath( name ));
@@ -207,54 +205,19 @@ shared class Sass
         send( id, true );
     }
 
-protected:
-
-    void watchDirImpl( in string input, in string output )
+    void createResultFile( string outpath, string source )
     {
-        auto event = getThreadEventLoop();
-        auto watcher = new AsyncDirectoryWatcher( event );
-        
-        if( options.singleFile.enabled )
-        {
-            watcher.run({
-                compileDir( input, output );
-            });
-        }
-        else
-        {
-            DWChangeInfo[2] change;
-            DWChangeInfo[] changeRef = change.ptr[0..2];
-
-            watcher.run({
-                watcher.readChanges( changeRef );
-                compileFile(
-                    change[0].path,
-                    buildPath ( output, baseName( change[0].path.setExtension( "css" )))
-                );
-            });
-        }
-
-        watcher.watchDir( input );
-
-        bool isOwnerTerminated;
-
-        while( event.loop() )
-        {
-            if( !isOwnerTerminated )
-            {
-                bool isStopped;
-                receive(
-                    ( bool stop ) { isStopped = stop; },
-                    ( OwnerTerminated e ) { isOwnerTerminated = true; }
-                );
-
-                if( isStopped )
-                    break;
-            }
-
-            continue;
-        }
+        auto file = File( outpath, "w+" );
+        file.write( source );
+        file.close();
     }
+
+    void createMapFile( string outpath, string source )
+    {
+        createResultFile( outpath ~ options.sourcemap.extension, source );
+    }
+
+protected:
 
     void testDirs( in string input, in string output )
     {
@@ -265,10 +228,7 @@ protected:
             throw new SassException( format( "`%s` is not a directory", input ));
         
         if( !output.exists() )
-            throw new SassException( format("Directory `%s` does not exist", output ));
-        
-        if( !output.isDir() )
-            throw new SassException( format( "`%s` is not a directory", output ));
+            mkdir( output );
     }
 
     void log( in string message )
@@ -356,7 +316,7 @@ protected:
             file.close();
             
             if( options.sourcemap.enabled )
-                writeMapFile( output, ctx.source_map_string.to!string() );
+                createMapFile( output, ctx.source_map_string.to!string() );
             
             sass_free_file_context( ctx );
             
@@ -371,11 +331,51 @@ protected:
         return result;
     }
 
-    void writeMapFile( string output, string source )
+    void watchDirImpl( in string input, in string output )
     {
-        auto mapfile = File( output ~ options.sourcemap.extension, "w+" );
-        mapfile.write( source );
-        mapfile.close();
+        auto event = getThreadEventLoop();
+        auto watcher = new AsyncDirectoryWatcher( event );
+        
+        if( options.singleFile.enabled )
+        {
+            watcher.run({
+                compileFolder( input, output );
+            });
+        }
+        else
+        {
+            DWChangeInfo[2] change;
+            DWChangeInfo[] changeRef = change.ptr[0..2];
+            
+            watcher.run({
+                watcher.readChanges( changeRef );
+                compileFile(
+                    change[0].path,
+                buildPath ( output, baseName( change[0].path.setExtension( "css" )))
+                );
+            });
+        }
+        
+        watcher.watchDir( input );
+        
+        bool isOwnerTerminated;
+        
+        while( event.loop() )
+        {
+            if( !isOwnerTerminated )
+            {
+                bool isStopped;
+                receive(
+                    ( bool stop ) { isStopped = stop; },
+                ( OwnerTerminated e ) { isOwnerTerminated = true; }
+                );
+                
+                if( isStopped )
+                    break;
+            }
+            
+            continue;
+        }
     }
 }
 
@@ -403,14 +403,14 @@ shared struct SassOptions
 
     private
     {
-        bool isCommentsEmitted;
-        bool isSyntaxIndented;
+        bool _isCommentsEmitted;
+        bool _isSyntaxIndented;
     }
 
-    void emitComments() { isCommentsEmitted = true; }
-    void enableIndentedSyntax() { isSyntaxIndented = true; }
+    void emitComments() { _isCommentsEmitted = true; }
+    void enableIndentedSyntax() { _isSyntaxIndented = true; }
 
-    private sass_options get() const
+    sass_options get() const
     {
         if( style == SassStyle.COMPACT || style == SassStyle.EXPANDED )
             throw new SassException( "Only `nested` and `compressed` output"
@@ -419,11 +419,11 @@ shared struct SassOptions
         sass_options options;
         
         options.output_style = cast(int)style;
-        options.source_comments = isCommentsEmitted;
+        options.source_comments = _isCommentsEmitted;
         options.omit_source_map_url = sourcemap.isSourceUrlOmitted;
         options.source_map_embed = sourcemap.isSourceUrlEmbedded;
         options.source_map_contents = sourcemap.isIncludeContentEmbedded;
-        options.is_indented_syntax_src = isSyntaxIndented;
+        options.is_indented_syntax_src = _isSyntaxIndented;
         options.include_paths = includePaths.toStringz();
         options.image_path = imagePath.toStringz();
         options.precision = precision;
@@ -436,23 +436,31 @@ shared struct SourceMap
 {
     private
     {
-        string _extension;
+        string _extension = ".map";
+        bool _enabled;
 
-        bool isSourceUrlOmitted;
-        bool isSourceUrlEmbedded;
-        bool isIncludeContentEmbedded;
+        bool _isSourceUrlOmitted;
+        bool _isSourceUrlEmbedded;
+        bool _isIncludeContentEmbedded;
     }
 
     @property
     {
         void extension( in string extension_ ) { _extension = "." ~ extension_; }
         string extension() const { return _extension; }
-        bool enabled() { return _extension != ""; }
+        bool enabled() const { return _enabled; }
+
+        bool isSourceUrlOmitted() const { return _isSourceUrlOmitted; }
+        bool isSourceUrlEmbedded() const { return _isSourceUrlEmbedded; }
+        bool isIncludeContentEmbedded() const { return _isIncludeContentEmbedded; }
     }
 
-    void omitSourceUrl() { isSourceUrlOmitted = true; }
-    void embedSourceUrl() { isSourceUrlEmbedded = true; }
-    void embedIncludeContent() { isIncludeContentEmbedded = true; }
+    void enable() { _enabled = true; }
+    void disable() { _enabled = false; }
+
+    void omitSourceUrl() { _isSourceUrlOmitted = true; }
+    void embedSourceUrl() { _isSourceUrlEmbedded = true; }
+    void embedIncludeContent() { _isIncludeContentEmbedded = true; }
 }
 
 shared struct LogSettings
@@ -475,30 +483,42 @@ shared struct LogSettings
 
 shared struct ExtensionSettings
 {
-    string scss = "scss";
-    string sass = "sass";
+    private
+    {
+        string _scss = "scss";
+        string _sass = "sass";
+    }
+
+    @property
+    {
+        string sass() const { return _sass; }
+        void sass( in string ext ) { _sass = ext; }
+
+        string scss() const { return _scss; }
+        void scss( in string ext ) { _scss = ext; }
+    }
 }
 
 shared struct Sass2ScssSettings
 {
     private
     {
-        int prettifyState = PrettifyLevel.ZERO;
-        int commentState = SASS2SCSS_KEEP_COMMENT;
+        int _prettifyState = PrettifyLevel.ZERO;
+        int _commentState = SASS2SCSS_KEEP_COMMENT;
     }
 
     @property void prettifyLevel( PrettifyLevel level )
     {
-        prettifyState = level;
+        _prettifyState = level;
     }
 
-    void keepComments() { commentState = SASS2SCSS_KEEP_COMMENT; }
-    void stripComments() { commentState = SASS2SCSS_STRIP_COMMENT; }
-    void convertComments() { commentState = SASS2SCSS_CONVERT_COMMENT; }
+    void keepComments() { _commentState = SASS2SCSS_KEEP_COMMENT; }
+    void stripComments() { _commentState = SASS2SCSS_STRIP_COMMENT; }
+    void convertComments() { _commentState = SASS2SCSS_CONVERT_COMMENT; }
 
-    private int get() const
+    int get() const
     {
-        return prettifyState | commentState;
+        return _prettifyState | _commentState;
     }
 }
 
@@ -509,37 +529,41 @@ shared struct SingleFile
         string _name = "style";
         string _placeholder = "%{filename}";
 
-        bool enabled;
-        bool sourceComments;
-        string commentsTemplate;
+        bool _enabled;
+        bool _isSourceCommentsEmitted;
+        string _sourceCommentTemplate;
     }
 
     @property
     {
+        bool enabled() const { return _enabled; }
+        bool isSourceCommentsEmitted() const { return _isSourceCommentsEmitted; }
+
         void name( in string name_ ) { _name = name_; }
-        private string name() const { return _name; }
+        string name() const { return _name; }
 
         void placeholder( in string placeholder_ ) { _placeholder = placeholder_; }
-        private string placeholder() const { return _placeholder; }
+        string placeholder() const { return _placeholder; }
 
-        void sourceCommentsTemplate( in string template_ )
+        void sourceCommentTemplate( in string template_ )
         {
             if( !template_.canFind( placeholder ))
                 throw new SassException( format( "Template should contain"
                     ~ " placeholder `%s` for file name", placeholder ));
             
-            commentsTemplate = template_;
+            _sourceCommentTemplate = template_;
         }
 
-        private string sourceCommentsTemplate() const
+        string sourceCommentTemplate() const
         {
-            if( commentsTemplate == "" )
+            if( _sourceCommentTemplate == "" )
                 return "File " ~ placeholder;
             else
-                return commentsTemplate;
+                return _sourceCommentTemplate;
         }
     }
 
-    void enable() { enabled = true; }
-    void emitSourceComments() { sourceComments = true; }
+    void enable() { _enabled = true; }
+    void disable() { _enabled = false; }
+    void emitSourceComments() { _isSourceCommentsEmitted = true; }
 }

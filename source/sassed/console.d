@@ -145,13 +145,13 @@ class SassConsole
         if( precision > 0 )
             sass.options.precision = precision;
 
-        switch( command )
+        switch( command ) with( Command )
         {
-            case Command.FOLDER:
+            case FOLDER:
                 folderRun();
                 break;
 
-            case Command.WATCH:
+            case WATCH:
                 watchRun();
                 break;
 
@@ -219,7 +219,7 @@ protected:
             if( output != "" )
             {
                 if( isSourceMapEmitting )
-                    sass.options.sourcemap.extension = ".map";
+                    sass.options.sourcemap.enable();
                 
                 sass.compileFile( input, output );
             }
@@ -234,7 +234,20 @@ protected:
             
             if( output != "" )
             {
-                auto result = sass.compile( contents );
+                string result;
+
+                if( isSourceMapEmitting )
+                {
+                    string sourcemap;
+
+                    sass.options.sourcemap.enable();
+                    result = sass.compile( contents, sourcemap );
+
+                    sass.createMapFile( output, sourcemap );
+                }
+                else
+                    result = sass.compile( contents );
+
                 auto file = File( output, "w+" );
                 file.write( result );
                 file.close();
@@ -252,10 +265,10 @@ protected:
                 throw new SassConsoleException( "By now source map does not"
                     ~ " implemented for single file compilation" );
 
-            sass.options.sourcemap.extension = ".map";
+            sass.options.sourcemap.enable();
         }
 
-        sass.compileDir( input, output );
+        sass.compileFolder( input, output );
     }
 
     void watchRun()
@@ -266,7 +279,7 @@ protected:
                 throw new SassConsoleException( "By now source map does not"
                     ~ " implemented for single file compilation" );
             
-            sass.options.sourcemap.extension = ".map";
+            sass.options.sourcemap.enable();
         }
 
         sass.watchDir( input, output );

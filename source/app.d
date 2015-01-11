@@ -11,7 +11,7 @@ void main( string[] args )
     }
     catch( Exception e )
     {
-        writeln( e );
+        writeln( e.msg );
         exit( -1 );
     }
 }
