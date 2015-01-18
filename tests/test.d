@@ -1,10 +1,13 @@
 ﻿module sassed.test;
 
-import sassed.sass;
-import sassed.console;
-
-import std.file : readText, remove, exists;
-import std.stdio : writeln;
+private
+{
+    import sassed.sass;
+    import sassed.console;
+    
+    import std.file : readText, remove, exists;
+    import std.stdio : writeln;
+}
 
 unittest
 {

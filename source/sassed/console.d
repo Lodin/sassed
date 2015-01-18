@@ -161,7 +161,7 @@ class SassConsole
         }
     }
 
-    void help() const
+    void help()
     {
         writefln( "Usage: %s [options] [INPUT] [OUTPUT]", executableName );
         writeln( "Options:" );

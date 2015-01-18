@@ -1,4 +1,39 @@
-﻿module sassed.sass;
+﻿// Written in the D Programming Language
+/**
+ * Thin wrapper for libsass in D Programming Language.
+ * It can:
+ * $(OL
+ *      $(LI Compile received string to css and return resulting css code)
+ *      $(LI Compile single file and put it to a specified folder)
+ *      $(LI Compile whole folder to multiple files and put it to another folder)
+ *      $(LI Compile whole folder to a single file)
+ *      $(LI Compile from `.sass` and `.scss` files)
+ *      $(LI Watch input folder and recompile files within output when user changing some of them)
+ * )
+ * 
+ * Usage:
+ * ----
+ * // Creating new Sass object
+ * auto sass = new shared Sass;
+ * 
+ * // Setting some options
+ * sass.options.style = SassStyle.COMPRESSED;
+ * sass.options.sourcemap.enable();
+ * 
+ * // Using one of compiling methods
+ * sass.compileFile( "path/to/file.scss", "path/to/result.css" );
+ * ----
+ * 
+ * Copyright:
+ *      Copyright Vlad Rindevich, 2015.
+ * 
+ * License:
+ *      $(LINK2 http://www.boost.org/LICENSE_1_0.txt, Boost License 1.0).
+ * 
+ * Authors:
+ *      Vlad Rindevich (rindevich.vs@gmail.com).
+ */
+module sassed.sass;
 
 public
 {
@@ -27,6 +62,11 @@ private
     import std.typecons : Tuple;
 }
 
+/**
+ * Style options specifier. All styles are defined at
+ * $(LINK http://sass-lang.com/documentation/file.SASS_REFERENCE.html#output_style, Sass Documentation).
+ * By now libsass implements only `nested` and `compressed` styles.
+ */
 enum SassStyle : int
 {
     NESTED = 0,
@@ -35,6 +75,17 @@ enum SassStyle : int
     COMPRESSED = 3,
 }
 
+/**
+ * Sass2scss libsass plugin option specifier. It consists of:
+ * $(OL
+ *     $(LI Write everything on one line (`minimized`))
+ *     $(LI Add lf after opening bracket (`lisp style`))
+ *     $(LI Add lf after opening and before closing bracket (`1TBS style`))
+ *     $(LI Add lf before/after opening and before closing (`allman style`))
+ * )
+ * More information can be found in the
+ * $(LINK https://github.com/mgreter/sass2scss, official documentation).
+ */
 enum PrettifyLevel
 {
     ZERO = SASS2SCSS_PRETTIFY_0,
@@ -43,8 +94,28 @@ enum PrettifyLevel
     THIRD = SASS2SCSS_PRETTIFY_3
 }
 
+/**
+ * SASS main implementation. Contains:
+ * $(OL
+ *     $(LI Different compiling methods: 
+ *          $(OL
+ *              $(LI `compile`. Simple string-to-string method)
+ *              $(LI `compileFile`. File compiling method)
+ *              $(LI `compileFolder`. Folder compiling method)
+ *              $(LI `watchDir`. Recompiling on change method)
+ *          ) 
+ *     )
+ *     $(LI Option specifier. It allows configuring SASS as needed)
+ *     $(LI Internal SASS compiling error handler. When compiler detects SASS
+ *          code error, it writes info to a log file (default `sass_errors.log`),
+ *          and shows it in console if available)
+ *     $(LI SASS to SCSS converter. It allows implicit conversion from SASS code
+ *          to CSS through the interjacent conversion to SCSS)
+ * )
+ */
 shared class Sass
 {
+    /// Contains SASS compiler options list
     SassOptions options;
     protected ILogger logger;
 
@@ -59,6 +130,13 @@ shared class Sass
         logger.destroy();
     }
 
+    /**
+     * Compiles SASS string to CSS string.
+     * 
+     * Params: source = SASS code to compile
+     * 
+     * Returns: compiled CSS code
+     */
     immutable(string) compile( in string source )
     {
         string sourcemap;
@@ -69,6 +147,15 @@ shared class Sass
             return compileImpl!false( source, sourcemap );
     }
 
+    /**
+     * Compiles SASS string to CSS string and generates sourcemap.
+     * 
+     * Params:
+     *         source = SASS code to compile
+     *         sourcemap = returns SASS sourcemap string
+     * 
+     * Returns: compiled CSS code.
+     */
     immutable(string) compile( in string source, out string sourcemap )
     {
         if( options.sourcemap.enabled )
@@ -77,7 +164,18 @@ shared class Sass
             return compileImpl!false( source, sourcemap );
     }
 
-    immutable(string) compileFile( in string input, in string output = "" )
+    /**
+     * Compiles SASS file.
+     * 
+     * Params:
+     *         input = path to compiling SASS file
+     *         output = path to result CSS file. If null, returns compiled code
+     *                  as string
+     * 
+     * Returns: compiled CSS code, if `output` parameter is empty. Otherwise
+     *          null
+     */
+    immutable(string) compileFile( in string input, in string output = null )
     {
         string sourcemap;
 
@@ -87,6 +185,18 @@ shared class Sass
             return compileFileImpl!false( input, output, sourcemap );
     } 
 
+    /**
+     * Compiles SASS file.
+     * 
+     * Params:
+     *         input = path to compiling SASS file
+     *         output = path to result CSS file. If null, returns compiled code
+     *                  as string
+     *         sourcemap = returns SASS sourcemap string
+     * 
+     * Returns: compiled CSS code, if `output` parameter is empty. Otherwise
+     *          null
+     */
     immutable(string) compileFile( in string input, in string output, out string sourcemap )
     {
         if( options.sourcemap.enabled )
@@ -95,6 +205,19 @@ shared class Sass
             return compileFileImpl!false( input, output, sourcemap );
     } 
 
+    /**
+     * Compiles folder with SASS files. There are two compiling variants:
+     * 1) If `singleFile` option is enabled, method compiles all folder SASS
+     * files to the `output` to a single file with name defined in
+     * `singleFile.name`. By now it is impossible to create sourcemap to that
+     * file. 
+     * 2) Otherwise, method compiles SASS files name-by-name to the folder
+     * `output`. Sourcemaps will be created too. 
+     * 
+     * Params:
+     *         input = path to folder contains SASS files
+     *         output = path to result folder
+     */
     void compileFolder( in string input, in string output )
     {
         void each( void delegate( in string name ) action ) const
@@ -194,27 +317,61 @@ shared class Sass
         }
     }
 
+    /**
+     * Activates directory watching and recompiles any file every time it
+     * changes.
+     * Watching works on two scenarios. If `singleFile` option is enabled, 
+     * recompiling affects all files in folder. Otherwise, only changed file
+     * will be recompiled. 
+     * Any watching process creates own thread and returns it Tid. To stop the
+     * process `unwatchDir` method should be used.
+     * 
+     * Params:
+     *         input = path to folder contains SASS files
+     *         output = path to result folder
+     * 
+     * Returns: Tid of watching thread
+     */
     Tid watchDir( in string input, in string output )
     {
         testDirs( input, output );
         return spawn( &watchDirImpl, input, output );
     }
 
-    void unwatchDir( scope Tid id )
+    /**
+     * Stops directory watching.
+     * 
+     * Params: tid = watching thread id
+     */
+    void unwatchDir( scope Tid tid )
     {
-        send( id, true );
+        send( tid, true );
     }
 
-    void createResultFile( string outpath, string source )
+    /**
+     * Creates result CSS file in `output` path from `source` string
+     * 
+     * Params: 
+     *         output = result file name with path
+     *         source = source code to write
+     */
+    void createResultFile( string output, string source )
     {
-        auto file = File( outpath, "w+" );
+        auto file = File( output, "w+" );
         file.write( source );
         file.close();
     }
 
-    void createMapFile( string outpath, string source )
+    /**
+     * Creates sourcemap file in `output` path from `source` string
+     * 
+     * Params: 
+     *         output = result file name with path
+     *         source = source code to write
+     */
+    void createMapFile( string output, string source )
     {
-        createResultFile( outpath ~ options.sourcemap.extension, source );
+        createResultFile( output ~ options.sourcemap.extension, source );
     }
 
 protected:
@@ -379,6 +536,7 @@ protected:
     }
 }
 
+/// SASS root exception
 class SassException : Exception
 {
     this( string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null )
@@ -389,22 +547,56 @@ class SassException : Exception
 
 private:
 
+/**
+ * SASS option specifier implementation. It allows configuring SASS compiler as
+ * you need. This struct is private and available only through `sass.options`
+ * call.
+ */
 shared struct SassOptions
 {
+    /// Sourcemap configuration tool
     SourceMap sourcemap;
+
+    /// Log configuration tool
     LogSettings log;
+
+    /// Extension configuration tool
     ExtensionSettings extension;
+
+    /// SASS to SCSS configuration tool 
     Sass2ScssSettings sass2scss;
+
+    /// Single file configuration tool
     SingleFile singleFile;
-    SassStyle style = SassStyle.NESTED;
-    string includePaths;
-    string imagePath;
-    int precision;
 
     private
     {
         bool _isCommentsEmitted;
         bool _isSyntaxIndented;
+
+        SassStyle _style = SassStyle.NESTED;
+        string _includePaths;
+        string _imagePath;
+        int _precision;
+    }
+
+    @property
+    {
+        /// Output CSS style
+        void style( in SassStyle value ) { _style = value; }
+        SassStyle style() const { return _style; }
+
+        /// Defines `@import` search locations
+        void includePaths( in string path ) { _includePaths = path; }
+        string includePaths() const { return _includePaths; }
+
+        /// Defines optional path to find images
+        void imagePath( in string path ) { _imagePath = path; }
+        string imagePath() const { return _imagePath; }
+
+        /// Defines the number precision of computed values.
+        void precision( in int value ) { _precision = value; }
+        int precision() const { return _precision; }
     }
 
     void emitComments() { _isCommentsEmitted = true; }
