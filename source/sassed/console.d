@@ -185,8 +185,8 @@ protected:
     {
         writefln( "Usage: %s [command] [options] [INPUT] [OUTPUT]", executableName );
         writeln( "Commands:" );
-        writefln( "%8s - %10s", "folder", "Compiles INPUT folder files to OUTPUT folder." );
-        writefln( "%8s - %10s", "watch", "Compiles INPUT folder files to OUTPUT folder, when any file is changed." );
+        writefln( "%10s - %s", "folder", "Compiles INPUT folder files to OUTPUT folder." );
+        writefln( "%10s - %s", "watch ", "Compiles INPUT folder files to OUTPUT folder, when any file is changed." );
 
         writeln( "Options:" );
 
