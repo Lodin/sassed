@@ -1,16 +1,24 @@
-﻿module sassed.console;
+﻿/**
+ * Console implementation for SASS compiler.
+ */
+
+module sassed.console;
 
 private
 {
-    import sassed.sass : SassStyle, Sass;
+    import sassed.sass : SassStyle, Sass, SassCompileException;
 
     import std.string : format;
     import std.array : Appender, join;
     import std.stdio : writeln, writefln, readf, File;
     import std.getopt : getopt, config;
     import std.algorithm : canFind;
+    import std.datetime : DateTime, Clock;
 }
 
+/**
+ * SASS console compiler main implementation
+ */
 class SassConsole
 {
     protected
@@ -107,6 +115,9 @@ class SassConsole
         sass.destroy();
     }
 
+    /**
+     * Starts the compilation
+     */
     void run ()
     {
         if( isHelpNeeding )
@@ -134,36 +145,49 @@ class SassConsole
         }
 
         if( isLineNumberUsing )
-            sass.options.emitComments();
+            sass.options.sourceComments.enable();
 
         if( loadPath != "" )
             sass.options.includePaths = loadPath;
 
         if( isMapCommentOmitting )
-            sass.options.sourcemap.omitSourceUrl();
+            sass.options.sourcemap.sourceMappingUrl.disable();
 
         if( precision > 0 )
             sass.options.precision = precision;
 
-        switch( command ) with( Command )
+        try
         {
-            case FOLDER:
-                folderRun();
-                break;
-
-            case WATCH:
-                watchRun();
-                break;
-
-            default:
-                defaultRun();
-                break;
+            switch( command ) with( Command )
+            {
+                case FOLDER:
+                    folderRun();
+                    break;
+                    
+                case WATCH:
+                    watchRun();
+                    break;
+                    
+                default:
+                    defaultRun();
+                    break;
+            }
+        }
+        catch( SassCompileException e )
+        {
+            writefln( "[%s] %s", currentTime,  e.msg );
         }
     }
 
+protected:
+    
     void help()
     {
-        writefln( "Usage: %s [options] [INPUT] [OUTPUT]", executableName );
+        writefln( "Usage: %s [command] [options] [INPUT] [OUTPUT]", executableName );
+        writeln( "Commands:" );
+        writefln( "%8s - %10s", "folder", "Compiles INPUT folder files to OUTPUT folder." );
+        writefln( "%8s - %10s", "watch", "Compiles INPUT folder files to OUTPUT folder, when any file is changed." );
+
         writeln( "Options:" );
 
         writeln( formatHelp("s", "stdin", "Read input from standard input instead of an input file."));
@@ -184,8 +208,6 @@ class SassConsole
         writeln( "" );
     }
 
-protected:
-
     string formatHelp( in string shortCommand, in string longCommand, in string description ) const
     {
         Appender!string result;
@@ -203,7 +225,7 @@ protected:
         {
             result ~= format(
                 "%7s %-22s %s",
-                shortCommand != ""? "-" ~ shortCommand : "",
+                "",
                 longCommand != ""? "--" ~ longCommand : "",
                 description
             );
@@ -283,6 +305,20 @@ protected:
         }
 
         sass.watchDir( input, output );
+    }
+
+    @property string currentTime()
+    {
+        auto date = cast(DateTime) Clock.currTime;
+        return format(
+            "%s.%s.%s %s:%s:%s",
+            date.day,
+            cast(ubyte) date.month,
+            date.year,
+            date.hour,
+            date.minute,
+            date.second
+        );
     }
 }
 

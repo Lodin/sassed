@@ -35,17 +35,10 @@
  */
 module sassed.sass;
 
-public
-{
-    import dlogg.log : LoggingLevel;
-}
-
 private
 {
     import derelict.sass.sass;
 
-    import dlogg.log : ILogger;
-    import dlogg.strict : StrictLogger;
     import libasync.watcher : AsyncDirectoryWatcher, DWChangeInfo;
     import libasync.events : getThreadEventLoop;
 
@@ -106,9 +99,6 @@ enum PrettifyLevel
  *          ) 
  *     )
  *     $(LI Option specifier. It allows configuring SASS as needed)
- *     $(LI Internal SASS compiling error handler. When compiler detects SASS
- *          code error, it writes info to a log file (default `sass_errors.log`),
- *          and shows it in console if available)
  *     $(LI SASS to SCSS converter. It allows implicit conversion from SASS code
  *          to CSS through the interjacent conversion to SCSS)
  * )
@@ -117,17 +107,13 @@ shared class Sass
 {
     /// Contains SASS compiler options list
     SassOptions options;
-    protected ILogger logger;
 
     this()
     {
         if( !DerelictSass.isLoaded )
             DerelictSass.load();
-    }
 
-    ~this()
-    {
-        logger.destroy();
+        options.sourcemap.sourceMappingUrl.enable();
     }
 
     /**
@@ -148,11 +134,11 @@ shared class Sass
     }
 
     /**
-     * Compiles SASS string to CSS string and generates sourcemap.
+     * Compiles SASS string to CSS string and generates source map.
      * 
      * Params:
      *         source = SASS code to compile
-     *         sourcemap = returns SASS sourcemap string
+     *         sourcemap = returns SASS source map string
      * 
      * Returns: compiled CSS code.
      */
@@ -192,7 +178,7 @@ shared class Sass
      *         input = path to compiling SASS file
      *         output = path to result CSS file. If null, returns compiled code
      *                  as string
-     *         sourcemap = returns SASS sourcemap string
+     *         sourcemap = returns SASS source map string
      * 
      * Returns: compiled CSS code, if `output` parameter is empty. Otherwise
      *          null
@@ -209,10 +195,10 @@ shared class Sass
      * Compiles folder with SASS files. There are two compiling variants:
      * 1) If `singleFile` option is enabled, method compiles all folder SASS
      * files to the `output` to a single file with name defined in
-     * `singleFile.name`. By now it is impossible to create sourcemap to that
+     * `singleFile.name`. By now it is impossible to create source map to that
      * file. 
      * 2) Otherwise, method compiles SASS files name-by-name to the folder
-     * `output`. Sourcemaps will be created too. 
+     * `output`. Source maps will be created too. 
      * 
      * Params:
      *         input = path to folder contains SASS files
@@ -233,7 +219,7 @@ shared class Sass
 
         void writeCommentedFile( ref File file, in string name, in string source ) const
         {
-            if( options.singleFile.isSourceCommentsEmitted )
+            if( options.singleFile.sourceComments.enabled )
             {
                 file.writeln(
                     "\n/* " 
@@ -265,19 +251,10 @@ shared class Sass
             each(( name )
             {
                 if( name.extension[1..$] == options.extension.sass )
-                {
-                    auto compiled = compile( sass2scss(
-                        name.readText().toStringz(),
-                        options.sass2scss.get()
-                    ).to!string() );
-                    
-                    writeCommentedFile( file, name, compiled );
-                }
-                else
-                {
-                    auto result = compileFile( name );
-                    writeCommentedFile( file, name, result );
-                }
+                    options.indentedSyntax.enable();
+
+                auto result = compileFile( name );
+                writeCommentedFile( file, name, result );
             });
         }
         else
@@ -285,34 +262,9 @@ shared class Sass
             each(( name )
             {
                 if( name.extension[1..$] == options.extension.sass )
-                {
-                    string compiled;
+                    options.indentedSyntax.enable();
 
-                    auto outputFile = buildOutputPath( name );
-
-                    if( options.sourcemap.enabled )
-                    {
-                        string sourcemap;
-
-                        compiled = compile( sass2scss(
-                            name.readText().toStringz(),
-                            options.sass2scss.get(),
-                        ).to!string(), sourcemap );
-
-                        createMapFile( output, sourcemap );
-                    }
-                    else
-                    {
-                        compiled = compile( sass2scss(
-                            name.readText().toStringz(),
-                            options.sass2scss.get()
-                        ).to!string() );
-                    }
-
-                    createResultFile( outputFile, compiled.to!string() );
-                }
-                else
-                    compileFile( name, buildOutputPath( name ));
+                compileFile( name, buildOutputPath( name ));
             });
         }
     }
@@ -349,6 +301,17 @@ shared class Sass
     }
 
     /**
+     * Converts SASS code to SCSS code
+     * 
+     * Params: source = SASS code
+     * Returns: converted SCSS code
+     */
+    string convertSass2Scss( in string source ) const
+    {
+        return sass2scss(source.toStringz(), options.sass2scss.get()).to!string();
+    }
+
+    /**
      * Creates result CSS file in `output` path from `source` string
      * 
      * Params: 
@@ -363,7 +326,7 @@ shared class Sass
     }
 
     /**
-     * Creates sourcemap file in `output` path from `source` string
+     * Creates source map file in `output` path from `source` string
      * 
      * Params: 
      *         output = result file name with path
@@ -379,31 +342,13 @@ protected:
     void testDirs( in string input, in string output )
     {
         if( !input.exists() )
-            throw new SassException( format( "Directory `%s` does not exist", input ));
+            throw new SassRuntimeException( format( "Directory `%s` does not exist", input ));
 
         if( !input.isDir() )
-            throw new SassException( format( "`%s` is not a directory", input ));
+            throw new SassRuntimeException( format( "`%s` is not a directory", input ));
         
         if( !output.exists() )
             mkdir( output );
-    }
-
-    void log( in string message )
-    {
-        if ( !logger )
-        {
-            string file;
-            
-            if( options.log.file != "" && options.log.file.exists() )
-                file = options.log.file;
-            else
-                file = "sass_errors.log";
-            
-            logger = new shared StrictLogger( file );
-            logger.minOutputLevel = options.log.level;
-        }
-
-        logger.log( message, options.log.level );
     }
 
     immutable(string) compileImpl( bool isMapUsing )(
@@ -425,7 +370,11 @@ protected:
         sass_compile( ctx );
         
         if( ctx.error_status )
-            log( ctx.error_message.to!string() );
+        {
+            auto errorMsg = ctx.error_message.to!string();
+            sass_free_context( ctx );
+            throw new SassCompileException( errorMsg );
+        }
         
         static if( isMapUsing )
             sourcemap = ctx.source_map_string.to!string();
@@ -443,10 +392,10 @@ protected:
     )
     {
         if( !input.exists() )
-            throw new SassException( format( "File `%s` does not exist", input ));
+            throw new SassRuntimeException( format( "File `%s` does not exist", input ));
         
         if( !input.isFile() )
-            throw new SassException( format( "`%s` is not a file", input ));
+            throw new SassRuntimeException( format( "`%s` is not a file", input ));
         
         auto ctx = sass_new_file_context();
         
@@ -462,7 +411,11 @@ protected:
         sass_compile_file( ctx );
         
         if( ctx.error_status )
-            log( ctx.error_message.to!string() );
+        {
+            auto errorMsg = ctx.error_message.to!string();
+            sass_free_file_context( ctx );
+            throw new SassCompileException( errorMsg );
+        }
         
         auto result = ctx.output_string.to!string();
         
@@ -545,6 +498,24 @@ class SassException : Exception
     }
 }
 
+/// SASS runtime exception not connected to code compilation error
+class SassRuntimeException : SassException
+{
+    this( string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null )
+    {
+        super( msg, file, line, next );
+    }
+}
+
+/// SASS code compilation exception
+class SassCompileException : SassException
+{
+    this( string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null )
+    {
+        super( msg, file, line, next );
+    }
+}
+
 private:
 
 /**
@@ -554,11 +525,8 @@ private:
  */
 shared struct SassOptions
 {
-    /// Sourcemap configuration tool
+    /// Source map configuration tool
     SourceMap sourcemap;
-
-    /// Log configuration tool
-    LogSettings log;
 
     /// Extension configuration tool
     ExtensionSettings extension;
@@ -569,11 +537,14 @@ shared struct SassOptions
     /// Single file configuration tool
     SingleFile singleFile;
 
+    /// Controls emitting inline source comments
+    Switcher sourceComments;
+
+    /// Controls treating source as SASS (as opposed to SCSS) 
+    Switcher indentedSyntax;
+
     private
     {
-        bool _isCommentsEmitted;
-        bool _isSyntaxIndented;
-
         SassStyle _style = SassStyle.NESTED;
         string _includePaths;
         string _imagePath;
@@ -582,40 +553,40 @@ shared struct SassOptions
 
     @property
     {
-        /// Output CSS style
+        /// Output style for the generated CSS code
         void style( in SassStyle value ) { _style = value; }
         SassStyle style() const { return _style; }
 
-        /// Defines `@import` search locations
+        /// `@import` directive search locations
         void includePaths( in string path ) { _includePaths = path; }
         string includePaths() const { return _includePaths; }
 
-        /// Defines optional path to find images
+        /// Optional path to find images
         void imagePath( in string path ) { _imagePath = path; }
         string imagePath() const { return _imagePath; }
 
-        /// Defines the number precision of computed values.
+        /// Number precision of computed values.
         void precision( in int value ) { _precision = value; }
         int precision() const { return _precision; }
     }
 
-    void emitComments() { _isCommentsEmitted = true; }
-    void enableIndentedSyntax() { _isSyntaxIndented = true; }
+    /// Resets SASS options to its default
+    void reset() { this = SassOptions.init; }
 
     sass_options get() const
     {
         if( style == SassStyle.COMPACT || style == SassStyle.EXPANDED )
-            throw new SassException( "Only `nested` and `compressed` output"
+            throw new SassRuntimeException( "Only `nested` and `compressed` output"
                 ~ " styles are currently supported" );
         
         sass_options options;
         
         options.output_style = cast(int)style;
-        options.source_comments = _isCommentsEmitted;
-        options.omit_source_map_url = sourcemap.isSourceUrlOmitted;
-        options.source_map_embed = sourcemap.isSourceUrlEmbedded;
-        options.source_map_contents = sourcemap.isIncludeContentEmbedded;
-        options.is_indented_syntax_src = _isSyntaxIndented;
+        options.source_comments = sourceComments.enabled;
+        options.omit_source_map_url = !sourcemap.sourceMappingUrl.enabled;
+        options.source_map_embed = sourcemap.sourceMappingUrl.embedding.enabled;
+        options.source_map_contents = sourcemap.includeContent.enabled;
+        options.is_indented_syntax_src = indentedSyntax.enabled;
         options.include_paths = includePaths.toStringz();
         options.image_path = imagePath.toStringz();
         options.precision = precision;
@@ -624,55 +595,38 @@ shared struct SassOptions
     }
 }
 
+/**
+ * Source map configurator implementation. Available only through
+ * `sass.options.sourcemap` call.
+ */
 shared struct SourceMap
 {
+    mixin SwitcherInterface;
+
+    /// SourceMappingUrl configuration tool
+    SourceMappingUrl sourceMappingUrl;
+
+    /// Controls embedding include contents in maps
+    Switcher includeContent;
+
     private
     {
         string _extension = ".map";
         bool _enabled;
-
-        bool _isSourceUrlOmitted;
-        bool _isSourceUrlEmbedded;
-        bool _isIncludeContentEmbedded;
     }
 
     @property
     {
+        /// Map file exstension. Default is `.map`
         void extension( in string extension_ ) { _extension = "." ~ extension_; }
         string extension() const { return _extension; }
-        bool enabled() const { return _enabled; }
-
-        bool isSourceUrlOmitted() const { return _isSourceUrlOmitted; }
-        bool isSourceUrlEmbedded() const { return _isSourceUrlEmbedded; }
-        bool isIncludeContentEmbedded() const { return _isIncludeContentEmbedded; }
-    }
-
-    void enable() { _enabled = true; }
-    void disable() { _enabled = false; }
-
-    void omitSourceUrl() { _isSourceUrlOmitted = true; }
-    void embedSourceUrl() { _isSourceUrlEmbedded = true; }
-    void embedIncludeContent() { _isIncludeContentEmbedded = true; }
-}
-
-shared struct LogSettings
-{
-    private
-    {
-        string _file;
-        LoggingLevel _level = LoggingLevel.Fatal;
-    }
-
-    @property
-    {
-        void file( in string file_ ) { _file = file_; }
-        string file() const { return _file; }
-
-        void level( in LoggingLevel level_ ) { _level = level_; }
-        LoggingLevel level() const { return _level; }
     }
 }
 
+/**
+ * Exstension configurator. Defines SASS and SCSS extension names. Available
+ * only through `sass.options.extension` call.
+ */
 shared struct ExtensionSettings
 {
     private
@@ -683,29 +637,41 @@ shared struct ExtensionSettings
 
     @property
     {
-        string sass() const { return _sass; }
+        /// SASS extension name
         void sass( in string ext ) { _sass = ext; }
+        string sass() const { return _sass; }
 
-        string scss() const { return _scss; }
+        /// SCSS extension name
         void scss( in string ext ) { _scss = ext; }
+        string scss() const { return _scss; }
     }
 }
 
+/**
+ * SASS to SCSS converter configurator. Available only through
+ * `sass.options.sass2scss` call.
+ */
 shared struct Sass2ScssSettings
 {
     private
     {
         int _prettifyState = PrettifyLevel.ZERO;
-        int _commentState = SASS2SCSS_KEEP_COMMENT;
+        int _commentState;
     }
 
+    /// Converter prettify level
     @property void prettifyLevel( PrettifyLevel level )
     {
         _prettifyState = level;
     }
 
+    /// Removes one-line comment
     void keepComments() { _commentState = SASS2SCSS_KEEP_COMMENT; }
+
+    /// Removes multi-line comments 
     void stripComments() { _commentState = SASS2SCSS_STRIP_COMMENT; }
+
+    /// Converts one-line comments to multi-line
     void convertComments() { _commentState = SASS2SCSS_CONVERT_COMMENT; }
 
     int get() const
@@ -714,33 +680,44 @@ shared struct Sass2ScssSettings
     }
 }
 
+/**
+ * Single file compilation configurator. Available only through
+ * `sass.options.singleFile` call.
+ */
 shared struct SingleFile
 {
+    mixin SwitcherInterface; 
+
+    /// Source comments configuration tool
+    Switcher sourceComments;
+
     private
     {
         string _name = "style";
         string _placeholder = "%{filename}";
 
-        bool _enabled;
-        bool _isSourceCommentsEmitted;
         string _sourceCommentTemplate;
     }
 
     @property
     {
-        bool enabled() const { return _enabled; }
-        bool isSourceCommentsEmitted() const { return _isSourceCommentsEmitted; }
-
+        /// Single file name
         void name( in string name_ ) { _name = name_; }
         string name() const { return _name; }
 
+        /// Placeholder string that will be replaced in template
         void placeholder( in string placeholder_ ) { _placeholder = placeholder_; }
         string placeholder() const { return _placeholder; }
 
+        /**
+         * Source comment template that will be placed as a delimiter between
+         * compiled code in result file. It should contain placeholder defined
+         * by `placeholder` method, that will be replaced by file name
+         */
         void sourceCommentTemplate( in string template_ )
         {
             if( !template_.canFind( placeholder ))
-                throw new SassException( format( "Template should contain"
+                throw new SassRuntimeException( format( "Template should contain"
                     ~ " placeholder `%s` for file name", placeholder ));
             
             _sourceCommentTemplate = template_;
@@ -754,8 +731,46 @@ shared struct SingleFile
                 return _sourceCommentTemplate;
         }
     }
+}
 
+/**
+ * Source mapping url configurator. Available only through
+ * `sass.options.sourcemap.sourceMappingUrl` call.
+ */
+shared struct SourceMappingUrl
+{
+    /// Controls embedding sourceMappingUrl as data uri
+    Switcher embedding;
+
+    mixin SwitcherInterface;
+}
+
+/**
+ * Structure implementation of $(D SwitcherInterface) 
+ */
+shared struct Switcher
+{
+    mixin SwitcherInterface;
+}
+
+/**
+ * Switcher interface for structures. It implements three methods:
+ * $(OL
+ *      $(LI Current state)
+ *      $(LI Enabling configurator)
+ *      $(LI Disabling configurator)
+ * )
+ */
+mixin template SwitcherInterface()
+{
+    private bool _enabled;
+
+    /// Returns: Configurator current state
+    @property bool enabled() const { return _enabled; }
+
+    /// Enables switcher
     void enable() { _enabled = true; }
+
+    /// Disables switcher
     void disable() { _enabled = false; }
-    void emitSourceComments() { _isSourceCommentsEmitted = true; }
 }
