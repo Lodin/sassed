@@ -219,12 +219,12 @@ shared class Sass
 
         void writeCommentedFile( ref File file, in string name, in string source ) const
         {
-            if( options.singleFile.sourceComments.enabled )
+            if( options.singleFile.comments.enabled )
             {
                 file.writeln(
                     "\n/* " 
-                    ~ options.singleFile.sourceCommentTemplate.replace(
-                        options.singleFile.placeholder,
+                    ~ options.singleFile.comments.templ.replace(
+                        options.singleFile.comments.placeholder,
                         name
                     ) ~ " */"
                 );
@@ -689,46 +689,58 @@ shared struct SingleFile
     mixin SwitcherInterface; 
 
     /// Source comments configuration tool
-    Switcher sourceComments;
+    SourceComments comments;
 
-    private
-    {
-        string _name = "style";
-        string _placeholder = "%{filename}";
-
-        string _sourceCommentTemplate;
-    }
+    private string _name = "style";
 
     @property
     {
         /// Single file name
         void name( in string name_ ) { _name = name_; }
         string name() const { return _name; }
+    }
+}
 
+/**
+ * Single file source comments configurator. Available only through
+ * `sass.options.singleFile.comments` call.
+ */
+shared struct SourceComments
+{
+    mixin SwitcherInterface; 
+
+    private
+    {
+        string _placeholder = "%{filename}";
+        string _template = "Source: %{filename}";
+    }
+
+    @property
+    {
         /// Placeholder string that will be replaced in template
         void placeholder( in string placeholder_ ) { _placeholder = placeholder_; }
         string placeholder() const { return _placeholder; }
-
+        
         /**
          * Source comment template that will be placed as a delimiter between
          * compiled code in result file. It should contain placeholder defined
          * by `placeholder` method, that will be replaced by file name
          */
-        void sourceCommentTemplate( in string template_ )
+        void templ( in string template_ )
         {
             if( !template_.canFind( placeholder ))
                 throw new SassRuntimeException( format( "Template should contain"
-                    ~ " placeholder `%s` for file name", placeholder ));
+                        ~ " placeholder `%s` for file name", placeholder ));
             
-            _sourceCommentTemplate = template_;
+            _template = template_;
         }
-
-        string sourceCommentTemplate() const
+        
+        string templ() const
         {
-            if( _sourceCommentTemplate == "" )
+            if( _template == "" )
                 return "File " ~ placeholder;
             else
-                return _sourceCommentTemplate;
+                return _template;
         }
     }
 }

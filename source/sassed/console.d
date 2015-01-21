@@ -23,6 +23,8 @@ class SassConsole
 {
     protected
     {
+        enum Version = "0.1.0";
+
         shared(Sass) sass;
         SassStyle[string] styles;
 
@@ -72,12 +74,13 @@ class SassConsole
             "m|sourcemap",                  &isSourceMapEmitting,
             "M|omit-map-comment",           &isMapCommentOmitting,
             "p|precision",                  &precision,
+            "v|version",                    &isVersionNeeding,
             "h|help",                       &isHelpNeeding,
         );
 
         executableName = args[0];
 
-        if( args.length == 1 )
+        if( args.length == 1 && !isVersionNeeding)
         {
             isHelpNeeding = true;
             return;
@@ -123,6 +126,12 @@ class SassConsole
         if( isHelpNeeding )
         {
             help();
+            return;
+        }
+
+        if( isVersionNeeding )
+        {
+            getVersion();
             return;
         }
 
@@ -186,7 +195,7 @@ protected:
         writefln( "Usage: %s [command] [options] [INPUT] [OUTPUT]", executableName );
         writeln( "Commands:" );
         writefln( "%10s - %s", "folder", "Compiles INPUT folder files to OUTPUT folder." );
-        writefln( "%10s - %s", "watch ", "Compiles INPUT folder files to OUTPUT folder, when any file is changed." );
+        writefln( "%10s - %s", "watch ", "Watching INPUT folder, and if any file changes, recompile it to OUTPUT" );
 
         writeln( "Options:" );
 
@@ -206,6 +215,11 @@ protected:
         writeln( formatHelp( "v", "version", "Display compiled versions." ));
         writeln( formatHelp( "h", "help", "Display this help message." ));
         writeln( "" );
+    }
+
+    void getVersion()
+    {
+        writeln( "Current sassed version: " ~ Version );
     }
 
     string formatHelp( in string shortCommand, in string longCommand, in string description ) const
