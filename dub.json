@@ -1,7 +1,6 @@
 {
-	"name": "sassed",
+    "name": "sassed",
     "targetName": "sassed",
-    "version": "0.1.0",
     "description": "Thin wrapper around libsass.",
 
     "authors": [ "Vlad Rindevich" ],
