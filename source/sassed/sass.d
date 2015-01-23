@@ -123,7 +123,7 @@ shared class Sass
      * 
      * Returns: compiled CSS code
      */
-    immutable(string) compile( in string source )
+    string compile( in string source ) const
     {
         string sourcemap;
 
@@ -142,7 +142,7 @@ shared class Sass
      * 
      * Returns: compiled CSS code.
      */
-    immutable(string) compile( in string source, out string sourcemap )
+    string compile( in string source, out string sourcemap ) const
     {
         if( options.sourcemap.enabled )
             return compileImpl!true( source, sourcemap );
@@ -161,7 +161,7 @@ shared class Sass
      * Returns: compiled CSS code, if `output` parameter is empty. Otherwise
      *          null
      */
-    immutable(string) compileFile( in string input, in string output = null )
+    string compileFile( in string input, in string output = null ) const
     {
         string sourcemap;
 
@@ -183,7 +183,7 @@ shared class Sass
      * Returns: compiled CSS code, if `output` parameter is empty. Otherwise
      *          null
      */
-    immutable(string) compileFile( in string input, in string output, out string sourcemap )
+    string compileFile( in string input, in string output, out string sourcemap ) const
     {
         if( options.sourcemap.enabled )
             return compileFileImpl!true( input, output, sourcemap );
@@ -318,7 +318,7 @@ shared class Sass
      *         output = result file name with path
      *         source = source code to write
      */
-    void createResultFile( string output, string source )
+    void createResultFile( string output, string source ) const
     {
         auto file = File( output, "w+" );
         file.write( source );
@@ -332,7 +332,7 @@ shared class Sass
      *         output = result file name with path
      *         source = source code to write
      */
-    void createMapFile( string output, string source )
+    void createMapFile( string output, string source ) const
     {
         createResultFile( output ~ options.sourcemap.extension, source );
     }
@@ -351,10 +351,10 @@ protected:
             mkdir( output );
     }
 
-    immutable(string) compileImpl( bool isMapUsing )(
+    string compileImpl( bool isMapUsing )(
         in string source,
         out string sourcemap
-    )
+    ) const
     {
         string result;
         auto ctx = sass_new_context();
@@ -385,11 +385,11 @@ protected:
         return result;
     }
 
-    immutable(string) compileFileImpl( bool isMapUsing )(
+    string compileFileImpl( bool isMapUsing )(
         in string input,
         in string output,
         out string sourcemap
-    )
+    ) const
     {
         if( !input.exists() )
             throw new SassRuntimeException( format( "File `%s` does not exist", input ));
@@ -454,15 +454,23 @@ protected:
         }
         else
         {
-            DWChangeInfo[2] change;
-            DWChangeInfo[] changeRef = change.ptr[0..2];
-            
+            DWChangeInfo[1] change;
+            DWChangeInfo[] changeRef = change.ptr[0..1];
+
             watcher.run({
-                watcher.readChanges( changeRef );
-                compileFile(
-                    change[0].path,
-                buildPath ( output, baseName( change[0].path.setExtension( "css" )))
-                );
+                auto isCompiled = false;
+                while(watcher.readChanges( changeRef ))
+                {
+                    if(!isCompiled)
+                    {
+                        compileFile(
+                            change[0].path,
+                            buildPath ( output, baseName( change[0].path.setExtension( "css" )))
+                        );
+
+                        isCompiled = true;
+                    }
+                }
             });
         }
         
@@ -477,7 +485,7 @@ protected:
                 bool isStopped;
                 receive(
                     ( bool stop ) { isStopped = stop; },
-                ( OwnerTerminated e ) { isOwnerTerminated = true; }
+                    ( OwnerTerminated e ) { isOwnerTerminated = true; }
                 );
                 
                 if( isStopped )
