@@ -7,7 +7,7 @@
 
     "dependencies": {
         "derelict-sass": ">=1.0.0",
-        "libasync": ">=0.6.6"
+        "libasync": ">=0.6.7"
     },
 
     "license": "BSL-1.0",

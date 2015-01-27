@@ -41,6 +41,7 @@ private
 
     import libasync.watcher : AsyncDirectoryWatcher, DWChangeInfo;
     import libasync.events : getThreadEventLoop;
+    import libasync.threads : destroyAsyncThreads;
 
     import std.string : toStringz, format;
     import std.conv : to;
@@ -53,6 +54,11 @@ private
     import std.array : Appender, replace;
     import std.algorithm : canFind;
     import std.typecons : Tuple;
+}
+
+shared static ~this()
+{
+    destroyAsyncThreads();
 }
 
 /**

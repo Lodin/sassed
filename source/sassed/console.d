@@ -62,6 +62,12 @@ class SassConsole
             "watch" : Command.WATCH
         ];
 
+        if( args.length == 1 )
+        {
+            isHelpNeeding = true;
+            return;
+        }
+
         getopt(
             args,
             config.passThrough,
@@ -80,11 +86,8 @@ class SassConsole
 
         executableName = args[0];
 
-        if( args.length == 1 && !isVersionNeeding)
-        {
-            isHelpNeeding = true;
+        if( args.length == 1 )
             return;
-        }
 
         if( commands.keys.canFind( args[1] ))
         {
@@ -111,11 +114,6 @@ class SassConsole
             if( args.length > 2 && !isStdinUsing )
                 output = args[2];
         }
-    }
-
-    ~this()
-    {
-        sass.destroy();
     }
 
     /**
