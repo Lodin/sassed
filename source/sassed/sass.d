@@ -54,6 +54,7 @@ private
     import std.array : Appender, replace;
     import std.algorithm : canFind;
     import std.typecons : Tuple;
+    import std.traits : Unqual;
 }
 
 shared static ~this()
@@ -93,6 +94,9 @@ enum PrettifyLevel
     THIRD = SASS2SCSS_PRETTIFY_3
 }
 
+/// Watcher inner compile error handler type
+alias bool delegate(SassCompileException) CompileHandler;
+
 /**
  * SASS main implementation. Contains:
  * $(OL
@@ -113,12 +117,14 @@ shared class Sass
 {
     /// Contains SASS compiler options list
     SassOptions options;
+    Version versions;
 
     this()
     {
         if( !DerelictSass.isLoaded )
             DerelictSass.load();
 
+        options.initialize();
         options.sourcemap.sourceMappingUrl.enable();
     }
 
@@ -363,31 +369,33 @@ protected:
     ) const
     {
         string result;
-        auto ctx = sass_new_context();
-        
-        ctx.options = options.get();
-        ctx.source_string = source.toStringz();
+
+        auto ctx = sass_make_data_context( cast(char*)source.toStringz() );
+        auto ctx_out = sass_data_context_get_context( ctx );
+
+        auto opts = options.get();
 
         static if( isMapUsing )
-            ctx.options.source_map_file = toStringz( "temp" ~ options.sourcemap.extension );
-        else
-            ctx.options.source_map_file = "".toStringz();
-        
-        sass_compile( ctx );
-        
-        if( ctx.error_status )
+            sass_option_set_source_map_file( opts, toStringz( "temp" ~ options.sourcemap.extension ) );
+//        else
+//            sass_option_set_source_map_file( opts, "".toStringz() );
+
+        sass_data_context_set_options( ctx, opts );
+        sass_compile_data_context( ctx );
+
+        if( sass_context_get_error_status( ctx_out ) > 0 )
         {
-            auto errorMsg = ctx.error_message.to!string();
-            sass_free_context( ctx );
-            throw new SassCompileException( errorMsg );
+            auto error = sass_context_get_error_message( ctx_out ).to!string();
+            sass_delete_data_context( ctx );
+            throw new SassCompileException( error );
         }
-        
+
         static if( isMapUsing )
-            sourcemap = ctx.source_map_string.to!string();
-        
-        result = ctx.output_string.to!string();
-        sass_free_context( ctx );
-        
+            sourcemap = sass_context_get_source_map_string( ctx_out ).to!string();
+
+        result = sass_context_get_output_string( ctx_out ).to!string();
+        sass_delete_data_context( ctx );
+
         return result;
     }
 
@@ -402,48 +410,51 @@ protected:
         
         if( !input.isFile() )
             throw new SassRuntimeException( format( "`%s` is not a file", input ));
-        
-        auto ctx = sass_new_file_context();
-        
-        ctx.options = options.get();
-        ctx.input_path = input.toStringz();
-        ctx.output_path = output.toStringz();
+
+        auto inputPtr = input.toStringz();
+
+        auto ctx = sass_make_file_context( inputPtr );
+        auto ctx_out = sass_file_context_get_context( ctx );
+
+        auto opts = options.get();
+
+        sass_option_set_input_path( opts, inputPtr );
+
+        if( output != "" )
+            sass_option_set_output_path( opts, output.toStringz() );
 
         static if( isMapUsing )
-            ctx.options.source_map_file = toStringz( output ~ options.sourcemap.extension );
-        else
-            ctx.options.source_map_file = "".toStringz();
-        
-        sass_compile_file( ctx );
-        
-        if( ctx.error_status )
+            sass_option_set_source_map_file( opts, toStringz( output ~ options.sourcemap.extension ) );
+
+        sass_file_context_set_options( ctx, opts );
+        sass_compile_file_context( ctx );
+
+        if( sass_context_get_error_status( ctx_out ) > 0 )
         {
-            auto errorMsg = ctx.error_message.to!string();
-            sass_free_file_context( ctx );
-            throw new SassCompileException( errorMsg );
+            auto error = sass_context_get_error_message( ctx_out ).to!string();
+            sass_delete_file_context( ctx );
+            throw new SassCompileException( error );
         }
-        
-        auto result = ctx.output_string.to!string();
-        
+
+        auto result = sass_context_get_output_string( ctx_out ).to!string();
+
         if( output != "" )
         {
-            auto file = File( output, "w+" );
-            file.write( result );
-            file.close();
-            
+            createResultFile( output, result );
+
             if( options.sourcemap.enabled )
-                createMapFile( output, ctx.source_map_string.to!string() );
-            
-            sass_free_file_context( ctx );
-            
+                createMapFile( output, sass_context_get_source_map_string( ctx_out ).to!string() );
+
+            sass_delete_file_context( ctx );
+
             return null;
         }
-        
+
         static if( isMapUsing )
-            sourcemap = ctx.source_map_string.to!string();
-        
-        sass_free_file_context( ctx );
-        
+            sourcemap = sass_context_get_source_map_string( ctx_out ).to!string();
+
+        sass_delete_file_context( ctx );
+
         return result;
     }
 
@@ -451,11 +462,18 @@ protected:
     {
         auto event = getThreadEventLoop();
         auto watcher = new AsyncDirectoryWatcher( event );
+        bool isStoppableError;
         
         if( options.singleFile.enabled )
         {
             watcher.run({
-                compileFolder( input, output );
+                try
+                    compileFolder( input, output );
+                catch( SassCompileException e )
+                {
+                    if( options.compileHandler != null )
+                        isStoppableError = options.compileHandler()( e );
+                }
             });
         }
         else
@@ -469,11 +487,19 @@ protected:
                 {
                     if(!isCompiled)
                     {
-                        compileFile(
-                            change[0].path,
-                            buildPath ( output, baseName( change[0].path.setExtension( "css" )))
-                        );
-
+                        try
+                        {
+                            compileFile(
+                                change[0].path,
+                                buildPath ( output, baseName( change[0].path.setExtension( "css" )))
+                            );
+                        }
+                        catch( SassCompileException e )
+                        {
+                            if( options.compileHandler != null )
+                                isStoppableError = options.compileHandler()( e );
+                        }
+                        
                         isCompiled = true;
                     }
                 }
@@ -497,7 +523,10 @@ protected:
                 if( isStopped )
                     break;
             }
-            
+
+            if( isStoppableError )
+                break;
+
             continue;
         }
     }
@@ -559,6 +588,9 @@ shared struct SassOptions
 
     private
     {
+        CompileHandler _handler;
+
+        Sass_Options* _options;
         SassStyle _style = SassStyle.NESTED;
         string _includePaths;
         string _imagePath;
@@ -582,30 +614,55 @@ shared struct SassOptions
         /// Number precision of computed values.
         void precision( in int value ) { _precision = value; }
         int precision() const { return _precision; }
+
+        /// Watcher inner compile error handler 
+        void compileHandler( scope CompileHandler handler ) { _handler = cast(shared(CompileHandler))handler; }
+        CompileHandler compileHandler() { return _handler; }
     }
 
     /// Resets SASS options to its default
     void reset() { this = SassOptions.init; }
 
-    sass_options get() const
+    Sass_Options* get() const
     {
         if( style == SassStyle.COMPACT || style == SassStyle.EXPANDED )
             throw new SassRuntimeException( "Only `nested` and `compressed` output"
                 ~ " styles are currently supported" );
-        
-        sass_options options;
-        
-        options.output_style = cast(int)style;
-        options.source_comments = sourceComments.enabled;
-        options.omit_source_map_url = !sourcemap.sourceMappingUrl.enabled;
-        options.source_map_embed = sourcemap.sourceMappingUrl.embedding.enabled;
-        options.source_map_contents = sourcemap.includeContent.enabled;
-        options.is_indented_syntax_src = indentedSyntax.enabled;
-        options.include_paths = includePaths.toStringz();
-        options.image_path = imagePath.toStringz();
-        options.precision = precision;
 
-        return options;
+        sass_option_set_precision( cast(Sass_Options*)_options, precision );
+        sass_option_set_output_style( cast(Sass_Options*)_options, cast(int)style );
+        sass_option_set_source_comments( cast(Sass_Options*)_options, sourceComments.enabled );
+        sass_option_set_source_map_embed( cast(Sass_Options*)_options, sourcemap.sourceMappingUrl.embedding.enabled );
+        sass_option_set_source_map_contents( cast(Sass_Options*)_options, sourcemap.includeContent.enabled );
+        sass_option_set_omit_source_map_url( cast(Sass_Options*)_options, !sourcemap.sourceMappingUrl.enabled );
+        sass_option_set_is_indented_syntax_src( cast(Sass_Options*)_options, indentedSyntax.enabled );
+        sass_option_set_input_path( cast(Sass_Options*)_options, includePaths.toStringz() );
+        sass_option_set_image_path( cast(Sass_Options*)_options, imagePath.toStringz() );
+
+        return cast(Sass_Options*)_options;
+    }
+
+    private void initialize() { _options = cast(shared(Sass_Options)*)sass_make_options(); }
+}
+
+/**
+ * SASS version controller. It contains versions of libsass, sass2scss plugin 
+ * and sassed itself. Available only through `sass.versions` call.
+ */
+shared struct Version
+{
+    private enum _version = "0.2.0";
+    
+    @property
+    {
+        /// Libsass version
+        string libsass() const { return libsass_version().to!string(); }
+        
+        /// Sass2scss version
+        string sass2scss() const { return sass2scss_version().to!string(); }
+        
+        /// Sassed version
+        string sassed() const { return _version; }
     }
 }
 

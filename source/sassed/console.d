@@ -23,8 +23,6 @@ class SassConsole
 {
     protected
     {
-        enum Version = "0.1.0";
-
         shared(Sass) sass;
         SassStyle[string] styles;
 
@@ -217,7 +215,8 @@ protected:
 
     void getVersion()
     {
-        writeln( "Current sassed version: " ~ Version );
+        writefln( "Current versions:\n- sassed: %s\n- libsass: %s\n- sass2scss: %s",
+            sass.versions.sassed, sass.versions.libsass, sass.versions.sass2scss );
     }
 
     string formatHelp( in string shortCommand, in string longCommand, in string description ) const
@@ -307,6 +306,11 @@ protected:
 
     void watchRun()
     {
+        sass.options.compileHandler = (e){
+            writefln( "[%s] %s", currentTime,  e.msg );
+            return true;
+        };
+
         if( isSourceMapEmitting )
         {
             if( isSingleFile )
