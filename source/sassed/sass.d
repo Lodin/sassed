@@ -55,6 +55,7 @@ private
     import std.algorithm : canFind;
     import std.typecons : Tuple;
     import std.traits : Unqual;
+    import std.c.stdlib : free;
 }
 
 shared static ~this()
@@ -95,7 +96,8 @@ enum PrettifyLevel
 }
 
 /// Watcher inner compile error handler type
-alias bool delegate(SassCompileException) CompileHandler;
+alias bool delegate(SassCompileException) CompileErrorHandler;
+alias void delegate(string input, string output) CompileSuccessHandler;
 
 /**
  * SASS main implementation. Contains:
@@ -124,7 +126,6 @@ shared class Sass
         if( !DerelictSass.isLoaded )
             DerelictSass.load();
 
-        options.initialize();
         options.sourcemap.sourceMappingUrl.enable();
     }
 
@@ -377,10 +378,10 @@ protected:
 
         static if( isMapUsing )
             sass_option_set_source_map_file( opts, toStringz( "temp" ~ options.sourcemap.extension ) );
-//        else
-//            sass_option_set_source_map_file( opts, "".toStringz() );
 
         sass_data_context_set_options( ctx, opts );
+        free( opts );
+
         sass_compile_data_context( ctx );
 
         if( sass_context_get_error_status( ctx_out ) > 0 )
@@ -427,6 +428,8 @@ protected:
             sass_option_set_source_map_file( opts, toStringz( output ~ options.sourcemap.extension ) );
 
         sass_file_context_set_options( ctx, opts );
+        free( opts );
+
         sass_compile_file_context( ctx );
 
         if( sass_context_get_error_status( ctx_out ) > 0 )
@@ -467,13 +470,20 @@ protected:
         if( options.singleFile.enabled )
         {
             watcher.run({
+                bool isFailed;
+
                 try
                     compileFolder( input, output );
                 catch( SassCompileException e )
                 {
-                    if( options.compileHandler != null )
-                        isStoppableError = options.compileHandler()( e );
+                    isFailed = true;
+
+                    if( options.compileError != null )
+                        isStoppableError = options.compileError( e );
                 }
+
+                if( options.compileSuccess != null && !isFailed )
+                    options.compileSuccess( input, output );
             });
         }
         else
@@ -487,18 +497,25 @@ protected:
                 {
                     if(!isCompiled)
                     {
+                        bool isFailed;
+                        auto inputName = change[0].path;
+                        auto outputName = buildPath(
+                            output,
+                            baseName( inputName.setExtension( "css" ) )
+                        );
+
                         try
-                        {
-                            compileFile(
-                                change[0].path,
-                                buildPath ( output, baseName( change[0].path.setExtension( "css" )))
-                            );
-                        }
+                            compileFile( inputName, outputName );
                         catch( SassCompileException e )
                         {
-                            if( options.compileHandler != null )
-                                isStoppableError = options.compileHandler()( e );
+                            isFailed = true;
+                             
+                            if( options.compileError != null )
+                                isStoppableError = options.compileError( e );
                         }
+
+                        if( options.compileSuccess != null && !isFailed )
+                            options.compileSuccess( inputName, outputName );
                         
                         isCompiled = true;
                     }
@@ -586,11 +603,14 @@ shared struct SassOptions
     /// Controls treating source as SASS (as opposed to SCSS) 
     Switcher indentedSyntax;
 
+    /// Handles compilation error within watcher loop
+    CompileErrorHandler compileError;
+
+    /// Handles compilation success within watcher loop
+    CompileSuccessHandler compileSuccess;
+
     private
     {
-        CompileHandler _handler;
-
-        Sass_Options* _options;
         SassStyle _style = SassStyle.NESTED;
         string _includePaths;
         string _imagePath;
@@ -614,10 +634,6 @@ shared struct SassOptions
         /// Number precision of computed values.
         void precision( in int value ) { _precision = value; }
         int precision() const { return _precision; }
-
-        /// Watcher inner compile error handler 
-        void compileHandler( scope CompileHandler handler ) { _handler = cast(shared(CompileHandler))handler; }
-        CompileHandler compileHandler() { return _handler; }
     }
 
     /// Resets SASS options to its default
@@ -629,20 +645,20 @@ shared struct SassOptions
             throw new SassRuntimeException( "Only `nested` and `compressed` output"
                 ~ " styles are currently supported" );
 
-        sass_option_set_precision( cast(Sass_Options*)_options, precision );
-        sass_option_set_output_style( cast(Sass_Options*)_options, cast(int)style );
-        sass_option_set_source_comments( cast(Sass_Options*)_options, sourceComments.enabled );
-        sass_option_set_source_map_embed( cast(Sass_Options*)_options, sourcemap.sourceMappingUrl.embedding.enabled );
-        sass_option_set_source_map_contents( cast(Sass_Options*)_options, sourcemap.includeContent.enabled );
-        sass_option_set_omit_source_map_url( cast(Sass_Options*)_options, !sourcemap.sourceMappingUrl.enabled );
-        sass_option_set_is_indented_syntax_src( cast(Sass_Options*)_options, indentedSyntax.enabled );
-        sass_option_set_input_path( cast(Sass_Options*)_options, includePaths.toStringz() );
-        sass_option_set_image_path( cast(Sass_Options*)_options, imagePath.toStringz() );
+        auto options = sass_make_options();
 
-        return cast(Sass_Options*)_options;
+        sass_option_set_precision( options, precision );
+        sass_option_set_output_style( options, cast(int)style );
+        sass_option_set_source_comments( options, sourceComments.enabled );
+        sass_option_set_source_map_embed( options, sourcemap.sourceMappingUrl.embedding.enabled );
+        sass_option_set_source_map_contents( options, sourcemap.includeContent.enabled );
+        sass_option_set_omit_source_map_url( options, !sourcemap.sourceMappingUrl.enabled );
+        sass_option_set_is_indented_syntax_src( options, indentedSyntax.enabled );
+        sass_option_set_include_path( options, includePaths.toStringz() );
+        sass_option_set_image_path( options, imagePath.toStringz() );
+
+        return options;
     }
-
-    private void initialize() { _options = cast(shared(Sass_Options)*)sass_make_options(); }
 }
 
 /**

@@ -180,7 +180,7 @@ class SassConsole
         }
         catch( SassCompileException e )
         {
-            writefln( "[%s] %s", currentTime,  e.msg );
+            error( e );
         }
     }
 
@@ -255,9 +255,14 @@ protected:
                     sass.options.sourcemap.enable();
                 
                 sass.compileFile( input, output );
+
+                success( input, output );
             }
             else
+            {
                 writeln( sass.compileFile( input ));
+                success( input, "stdout" );
+            }
         }
         else
         {
@@ -284,9 +289,14 @@ protected:
                 auto file = File( output, "w+" );
                 file.write( result );
                 file.close();
+
+                success( "stdin", output );
             }
             else
+            {
                 writeln( sass.compile( contents ));
+                success( "stdin", "stdout" );
+            }
         }
     }
 
@@ -306,9 +316,13 @@ protected:
 
     void watchRun()
     {
-        sass.options.compileHandler = (e){
-            writefln( "[%s] %s", currentTime,  e.msg );
-            return true;
+        sass.options.compileError = (e){
+            error( e );
+            return false;
+        };
+
+        sass.options.compileSuccess = (input, output){
+            success( input, output );
         };
 
         if( isSourceMapEmitting )
@@ -323,18 +337,19 @@ protected:
         sass.watchDir( input, output );
     }
 
+    void success(string input, string output)
+    {
+        writefln( "[%s]: Success compilation %s -> %s", currentTime, input, output );
+    }
+
+    void error( SassCompileException e )
+    {
+        writefln( "[%s] %s", currentTime,  e.msg );
+    }
+
     @property string currentTime()
     {
-        auto date = cast(DateTime) Clock.currTime;
-        return format(
-            "%s.%s.%s %s:%s:%s",
-            date.day,
-            cast(ubyte) date.month,
-            date.year,
-            date.hour,
-            date.minute,
-            date.second
-        );
+        return (cast(DateTime) Clock.currTime).toSimpleString();
     }
 }
 
